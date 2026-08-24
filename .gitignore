@@ -46,3 +46,6 @@ htmlcov/
 
 # Ollama models (large files)
 models/
+
+# ACT local specs (stored in GitHub Issues)
+ai_specs/
