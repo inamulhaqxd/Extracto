@@ -1,0 +1,61 @@
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    APP_NAME: str = "AI RFP Excel Generator"
+    APP_ENV: str = "development"
+    DEBUG: bool = True
+    LOG_LEVEL: str = "INFO"
+
+    POSTGRES_USER: str = "tender_user"
+    POSTGRES_PASSWORD: str = "tender_pass"
+    POSTGRES_DB: str = "tender_db"
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+
+    DATABASE_URL: str = "postgresql+asyncpg://tender_user:tender_pass@localhost:5432/tender_db"
+
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_TEXT_MODEL: str = "llama3.1"
+    OLLAMA_VISION_MODEL: str = "llava"
+    OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
+
+    API_HOST: str = "0.0.0.0"
+    API_PORT: int = 8000
+
+    UPLOAD_DIR: str = "./data/uploads"
+    EXTRACTED_DIR: str = "./data/extracted"
+    IMAGES_DIR: str = "./data/images"
+    OCR_DIR: str = "./data/ocr"
+    PROCESSED_DIR: str = "./data/processed"
+    GENERATED_DIR: str = "./data/generated"
+
+    CONFIDENCE_HIGH_THRESHOLD: float = 0.90
+    CONFIDENCE_MEDIUM_THRESHOLD: float = 0.70
+    MAX_FILE_SIZE_MB: int = 100
+    OCR_CONFIDENCE_THRESHOLD: float = 0.60
+
+    SECRET_KEY: str = "change-me-in-production"
+    ALLOWED_EXTENSIONS: str = ".pdf,.xlsx,.xls"
+
+    @property
+    def ALLOWED_EXTENSIONS_LIST(self) -> list[str]:
+        return [ext.strip() for ext in self.ALLOWED_EXTENSIONS.split(",")]
+
+    def ensure_data_dirs(self) -> None:
+        for dir_attr in [
+            self.UPLOAD_DIR,
+            self.EXTRACTED_DIR,
+            self.IMAGES_DIR,
+            self.OCR_DIR,
+            self.PROCESSED_DIR,
+            self.GENERATED_DIR,
+        ]:
+            Path(dir_attr).mkdir(parents=True, exist_ok=True)
+
+
+settings = Settings()
