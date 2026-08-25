@@ -2,7 +2,12 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from ai_rfp_excel.app.api.auth import router as auth_router
+from ai_rfp_excel.app.api.errors import register_error_handlers
+from ai_rfp_excel.app.api.health import router as health_router
 from ai_rfp_excel.app.config import settings
+from ai_rfp_excel.app.logging import setup_logging
+
+setup_logging()
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -10,7 +15,10 @@ app = FastAPI(
     redoc_url="/redoc" if settings.DEBUG else None,
 )
 
+register_error_handlers(app)
+
 app.include_router(auth_router)
+app.include_router(health_router)
 
 
 @app.get("/ping")
