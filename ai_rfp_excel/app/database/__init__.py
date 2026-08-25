@@ -1,4 +1,4 @@
-from ai_rfp_excel.app.database.connection import Base, async_session, engine, get_db
+from ai_rfp_excel.app.database.connection import async_session, engine, get_db
 from ai_rfp_excel.app.database.models import (
     Base,
     ComplianceResult,
@@ -8,6 +8,7 @@ from ai_rfp_excel.app.database.models import (
     DocumentTable,
     Equipment,
     Evidence,
+    ExtractedFact,
     Mapping,
     ProcessingRun,
     Requirement,
@@ -19,22 +20,22 @@ from ai_rfp_excel.app.database.models import (
 
 __all__ = [
     "Base",
-    "engine",
-    "async_session",
-    "get_db",
-    "User",
+    "ComplianceResult",
     "Document",
+    "DocumentImage",
     "DocumentPage",
     "DocumentTable",
-    "DocumentImage",
-    "ExtractedFact",
     "Equipment",
+    "Evidence",
+    "ExtractedFact",
+    "Mapping",
+    "ProcessingRun",
+    "Requirement",
+    "User",
+    "ValidationResult",
     "Workbook",
     "WorkbookSheet",
-    "Requirement",
-    "Mapping",
-    "ComplianceResult",
-    "Evidence",
-    "ProcessingRun",
-    "ValidationResult",
+    "async_session",
+    "engine",
+    "get_db",
 ]

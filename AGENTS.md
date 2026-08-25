@@ -16,6 +16,18 @@ Pipeline pattern. Each phase is an independent module with defined inputs/output
 - SQLAlchemy 2.0 + Alembic for database
 - pytest for testing
 - Pydantic for validation
+- Type hints required on all functions and methods
+
+## Verification Rules
+
+After completing any task or work item, ALWAYS run:
+
+```bash
+python -m ruff check ai_rfp_excel/app --ignore E501
+python -m mypy ai_rfp_excel/app --ignore-missing-imports --explicit-package-bases
+```
+
+Fix all errors before committing. No exceptions.
 
 ## Skills Reference
 
