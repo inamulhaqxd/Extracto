@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 class AppError(Exception):
@@ -29,6 +30,7 @@ class ConfigurationError(AppError):
         super().__init__(message=f"Configuration error: {message}", status_code=500)
 
 
+
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
@@ -41,8 +43,8 @@ def register_error_handlers(app: FastAPI) -> None:
             },
         )
 
-    @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -51,6 +53,7 @@ def register_error_handlers(app: FastAPI) -> None:
                 "type": "HTTPException",
             },
         )
+
 
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:

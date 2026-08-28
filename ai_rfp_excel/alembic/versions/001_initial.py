@@ -25,8 +25,10 @@ def upgrade() -> None:
         sa.Column("hashed_password", sa.String(255), nullable=False),
         sa.Column("is_active", sa.Boolean, default=True),
         sa.Column("is_admin", sa.Boolean, default=False),
+        sa.Column("metadata_json", postgresql.JSONB, nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+
     )
 
     op.create_table(

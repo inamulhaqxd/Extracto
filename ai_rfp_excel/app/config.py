@@ -20,9 +20,15 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://tender_user:tender_pass@localhost:5432/tender_db"
 
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_TEXT_MODEL: str = "llama3.1"
+    OLLAMA_TEXT_MODEL: str = "qwen2.5:3b"
     OLLAMA_VISION_MODEL: str = "llava"
     OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
+    DEFAULT_LLM_MODEL: str = "qwen3:4b"
+    LLM_TEMPERATURE: float = 0.1
+    LLM_TIMEOUT_SECONDS: int = 120
+    OLLAMA_KEEP_ALIVE: str = "5m"
+    OLLAMA_NUM_PARALLEL: int = 2
+
 
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000

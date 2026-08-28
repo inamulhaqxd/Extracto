@@ -65,3 +65,5 @@ def setup_logging() -> None:
 
 
 logger = structlog.get_logger()
+get_logger = structlog.get_logger
+
