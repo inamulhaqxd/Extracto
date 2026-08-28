@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from ai_rfp_excel.app.api.auth import router as auth_router
 from ai_rfp_excel.app.api.errors import register_error_handlers
+from ai_rfp_excel.app.api.excel import router as excel_router
 from ai_rfp_excel.app.api.health import router as health_router
 from ai_rfp_excel.app.api.pdf import router as pdf_router
 from ai_rfp_excel.app.config import settings
@@ -21,6 +22,8 @@ register_error_handlers(app)
 app.include_router(auth_router)
 app.include_router(health_router)
 app.include_router(pdf_router)
+app.include_router(excel_router)
+
 
 
 @app.get("/ping")
