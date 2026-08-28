@@ -21,28 +21,10 @@ services:
       timeout: 5s
       retries: 5
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: tender_ollama
-    restart: unless-stopped
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - tender_network
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-
   api:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: ai_rfp_excel/Dockerfile
     container_name: tender_api
     restart: unless-stopped
     ports:
@@ -51,7 +33,7 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tender_user}:${POSTGRES_PASSWORD:-tender_pass}@postgres:5432/${POSTGRES_DB:-tender_db}
-      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
     volumes:
       - upload_data:/app/data/uploads
       - extracted_data:/app/data/extracted
@@ -62,15 +44,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
     networks:
       - tender_network
 
   streamlit:
     build:
-      context: .
-      dockerfile: Dockerfile.frontend
+      context: ..
+      dockerfile: ai_rfp_excel/Dockerfile.frontend
     container_name: tender_streamlit
     restart: unless-stopped
     ports:
@@ -90,7 +70,6 @@ networks:
 
 volumes:
   postgres_data:
-  ollama_data:
   upload_data:
   extracted_data:
   image_data:
