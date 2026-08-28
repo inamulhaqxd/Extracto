@@ -68,3 +68,34 @@ class WorkbookAnalysis(BaseModel):
     sheet_names: list[str]
     sheets: list[SheetAnalysis] = Field(default_factory=list)
     total_requirements: int = 0
+
+
+class ValidationSeverity(str, Enum):
+    ERROR = "error"
+    WARNING = "warning"
+    INFO = "info"
+
+
+class ValidationIssue(BaseModel):
+    severity: ValidationSeverity
+    sheet_name: str | None = None
+    cell: str | None = None
+    message: str
+    rule: str
+
+
+class ValidationReport(BaseModel):
+    is_valid: bool
+    total_checks: int
+    passed_checks: int
+    issues: list[ValidationIssue] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class PopulationResult(BaseModel):
+    output_file_path: str
+    filename: str
+    total_populated_cells: int
+    summary_sheet_created: bool
+    validation_report: ValidationReport
+

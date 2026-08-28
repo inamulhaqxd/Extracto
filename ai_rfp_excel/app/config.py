@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     OCR_DIR: str = "./data/ocr"
     PROCESSED_DIR: str = "./data/processed"
     GENERATED_DIR: str = "./data/generated"
+    OUTPUT_DIR: str = "./data/generated"
+
 
     CONFIDENCE_HIGH_THRESHOLD: float = 0.90
     CONFIDENCE_MEDIUM_THRESHOLD: float = 0.70
@@ -60,8 +62,10 @@ class Settings(BaseSettings):
             self.OCR_DIR,
             self.PROCESSED_DIR,
             self.GENERATED_DIR,
+            self.OUTPUT_DIR,
         ]:
             Path(dir_attr).mkdir(parents=True, exist_ok=True)
+
 
 
 settings = Settings()

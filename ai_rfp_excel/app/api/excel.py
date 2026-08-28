@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,15 +12,20 @@ from ai_rfp_excel.app.config import settings
 from ai_rfp_excel.app.database.connection import get_db
 from ai_rfp_excel.app.database.models import Requirement, User, Workbook, WorkbookSheet
 from ai_rfp_excel.app.excel.analyzer import ExcelAnalyzer
-from ai_rfp_excel.app.excel.models import WorkbookAnalysis
+from ai_rfp_excel.app.excel.models import PopulationResult, WorkbookAnalysis
 from ai_rfp_excel.app.excel.utils import (
     MAX_EXCEL_SIZE_MB,
     VALID_EXCEL_EXTENSIONS,
     calculate_workbook_hash,
 )
+from ai_rfp_excel.app.excel.writer import ExcelWriter
+from ai_rfp_excel.app.matching.engine import ComplianceEngine
+from ai_rfp_excel.app.matching.models import ComplianceDecision
 
 router = APIRouter(prefix="/excel", tags=["excel"])
 analyzer = ExcelAnalyzer()
+writer = ExcelWriter()
+compliance_engine = ComplianceEngine()
 
 
 class ExcelUploadResponse(BaseModel):
@@ -40,6 +46,11 @@ class ExcelAnalyzeResponse(BaseModel):
     total_sheets: int
     total_requirements: int
     analysis: WorkbookAnalysis
+
+
+class ExcelPopulateRequest(BaseModel):
+    workbook_id: str
+    decisions: list[ComplianceDecision] | None = None
 
 
 @router.post("/upload", response_model=ExcelUploadResponse, status_code=status.HTTP_201_CREATED)
@@ -174,7 +185,6 @@ async def analyze_uploaded_excel(
             detail=f"Failed to analyze Excel workbook: {e!s}",
         ) from e
 
-
     # Persist WorkbookSheet and Requirement models into database
     for sheet_data in analysis.sheets:
         sheet_id = uuid.uuid4()
@@ -273,3 +283,72 @@ async def get_excel_structure(
         "file_hash": wb_row.file_hash,
         "sheets": sheets_info,
     }
+
+
+@router.post("/populate", response_model=PopulationResult)
+async def populate_excel_workbook(
+    request: ExcelPopulateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PopulationResult:
+    """Populate workbook with compliance results, preserving format and adding summary tab."""
+    result = await db.execute(Workbook.__table__.select().where(Workbook.id == request.workbook_id))
+    workbook_row = result.first()
+
+    if workbook_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workbook not found",
+        )
+
+    file_ext = Path(workbook_row.filename).suffix
+    file_path = Path(settings.UPLOAD_DIR) / f"{request.workbook_id}{file_ext}"
+    if not file_path.exists():
+        file_path = Path(settings.UPLOAD_DIR) / workbook_row.filename
+        if not file_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Excel file not found on disk",
+            )
+
+    analysis = analyzer.analyze_workbook(
+        file_path=str(file_path),
+        workbook_id=request.workbook_id,
+        version=workbook_row.version,
+    )
+
+    decisions = request.decisions or []
+
+    try:
+        pop_res = writer.populate_workbook(
+            template_path=file_path,
+            analysis=analysis,
+            decisions=decisions,
+        )
+        return pop_res
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Failed to populate Excel workbook: {e!s}",
+        ) from e
+
+
+@router.get("/download/{filename}")
+async def download_populated_excel(
+    filename: str,
+    current_user: User = Depends(get_current_user),
+) -> FileResponse:
+    """Download populated Excel file from output directory."""
+    file_path = Path(settings.OUTPUT_DIR) / filename
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File '{filename}' not found in output directory",
+        )
+
+    return FileResponse(
+        path=str(file_path),
+        filename=filename,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+

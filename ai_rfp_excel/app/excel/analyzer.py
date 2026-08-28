@@ -24,8 +24,6 @@ REQUIREMENT_KEYWORDS = {
     "description",
     "feature",
     "features",
-    "item",
-    "items",
     "clause",
     "criteria",
     "specs",
@@ -33,6 +31,7 @@ REQUIREMENT_KEYWORDS = {
     "technical requirement",
     "scope",
 }
+
 
 COMPLIANCE_KEYWORDS = {
     "compliance",
@@ -317,9 +316,9 @@ class ExcelAnalyzer:
         val_clean: str,
         header_text: str,
     ) -> tuple[ColumnType, str | None]:
-        # Check requirement
-        if any(kw in val_clean for kw in REQUIREMENT_KEYWORDS):
-            return ColumnType.REQUIREMENT, None
+        # Check index
+        if any(val_clean == kw or val_clean.startswith(f"{kw} ") or val_clean.startswith(f"{kw}#") for kw in INDEX_KEYWORDS):
+            return ColumnType.INDEX, None
 
         # Check compliance
         if any(kw in val_clean for kw in COMPLIANCE_KEYWORDS):
@@ -329,9 +328,9 @@ class ExcelAnalyzer:
         if any(kw in val_clean for kw in REMARKS_KEYWORDS):
             return ColumnType.REMARKS, None
 
-        # Check index
-        if any(val_clean == kw or val_clean.startswith(f"{kw} ") for kw in INDEX_KEYWORDS):
-            return ColumnType.INDEX, None
+        # Check requirement
+        if any(kw in val_clean for kw in REQUIREMENT_KEYWORDS):
+            return ColumnType.REQUIREMENT, None
 
         # Check section
         if any(kw in val_clean for kw in SECTION_KEYWORDS):
@@ -344,6 +343,7 @@ class ExcelAnalyzer:
             return ColumnType.VENDOR, header_text
 
         return ColumnType.UNKNOWN, None
+
 
     def _detect_sections_and_requirements(
         self,
