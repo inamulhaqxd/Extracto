@@ -8,6 +8,7 @@ from ai_rfp_excel.app.api.errors import register_error_handlers
 from ai_rfp_excel.app.api.excel import router as excel_router
 from ai_rfp_excel.app.api.health import router as health_router
 from ai_rfp_excel.app.api.pdf import router as pdf_router
+from ai_rfp_excel.app.api.runs import router as runs_router
 from ai_rfp_excel.app.config import settings
 from ai_rfp_excel.app.logging import setup_logging
 
@@ -27,6 +28,8 @@ app.include_router(pdf_router)
 app.include_router(excel_router)
 app.include_router(ai_router)
 app.include_router(compliance_router)
+app.include_router(runs_router)
+
 
 
 
