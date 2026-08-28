@@ -64,15 +64,46 @@ services:
     networks:
       - tender_network
 
+  backup:
+    image: postgres:16-alpine
+    container_name: tender_backup
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-tender_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tender_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-tender_db}
+      BACKUP_DIR: /backups
+      RETENTION_DAYS: 14
+    volumes:
+      - backups_data:/backups
+    entrypoint: |
+      /bin/sh -c '
+      while true; do
+        TIMESTAMP=$$(date +"%Y%m%d_%H%M%S")
+        echo "[Automated Backup] Starting daily pg_dump to /backups/tender_db_backup_$${TIMESTAMP}.sql.gz..."
+        PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -h $$POSTGRES_HOST -U $$POSTGRES_USER -d $$POSTGRES_DB | gzip > /backups/tender_db_backup_$${TIMESTAMP}.sql.gz
+        find /backups -name "tender_db_backup_*.sql.gz" -mtime +14 -delete
+        echo "[Automated Backup] Sleeping for 24 hours until next scheduled backup..."
+        sleep 86400
+      done'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tender_network
+
 networks:
   tender_network:
     driver: bridge
 
 volumes:
   postgres_data:
+  backups_data:
   upload_data:
   extracted_data:
   image_data:
   ocr_data:
   processed_data:
   generated_data:
+
