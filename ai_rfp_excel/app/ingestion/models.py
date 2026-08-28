@@ -17,6 +17,7 @@ class ExtractedText(BaseModel):
     text: str
     source: str = "native_pdf"
     confidence: float = 1.0
+    bbox: dict[str, Any] | None = None
 
 
 class ExtractedTable(BaseModel):
@@ -43,6 +44,19 @@ class OCRResult(BaseModel):
     text: str
     confidence: float
     engine: str = "tesseract"
+    bbox: dict[str, Any] | None = None
+
+
+class ProvenanceRecord(BaseModel):
+    entity_type: str
+    entity_id: str | None = None
+    document_id: str
+    page_number: int
+    bbox: dict[str, Any] | None = None
+    source: str
+    extraction_method: str
+    confidence: float
+    content_preview: str | None = None
 
 
 class PageResult(BaseModel):
@@ -86,3 +100,77 @@ class ProcessingContext(BaseModel):
     total_pages: int = 0
     processed_pages: int = 0
     failed_pages: list[int] = Field(default_factory=list)
+
+    def get_provenance_records(self) -> list[ProvenanceRecord]:
+        records: list[ProvenanceRecord] = []
+
+        for page in self.pdf_pages:
+            if page.native_text and page.native_text.text.strip():
+                records.append(
+                    ProvenanceRecord(
+                        entity_type="text",
+                        entity_id=f"TXT-{page.page_number:04d}",
+                        document_id=self.document_id,
+                        page_number=page.page_number,
+                        bbox=page.native_text.bbox,
+                        source=page.native_text.source,
+                        extraction_method="native_pdf",
+                        confidence=page.native_text.confidence,
+                        content_preview=page.native_text.text[:100],
+                    )
+                )
+
+            for tbl in page.tables:
+                records.append(
+                    ProvenanceRecord(
+                        entity_type="table",
+                        entity_id=tbl.table_id,
+                        document_id=self.document_id,
+                        page_number=tbl.page_number,
+                        bbox=tbl.bbox,
+                        source="pdf_table",
+                        extraction_method="pdfplumber",
+                        confidence=1.0,
+                        content_preview=f"Headers: {', '.join(tbl.headers[:3])}",
+                    )
+                )
+
+            for img in page.images:
+                records.append(
+                    ProvenanceRecord(
+                        entity_type="image",
+                        entity_id=img.image_id,
+                        document_id=self.document_id,
+                        page_number=img.page_number,
+                        bbox=img.bbox,
+                        source="pdf_image",
+                        extraction_method=img.extraction_method,
+                        confidence=1.0,
+                        content_preview=img.image_path,
+                    )
+                )
+
+            if page.ocr_result and page.ocr_result.text.strip():
+                records.append(
+                    ProvenanceRecord(
+                        entity_type="ocr",
+                        entity_id=f"OCR-{page.page_number:04d}",
+                        document_id=self.document_id,
+                        page_number=page.page_number,
+                        bbox=page.ocr_result.bbox,
+                        source="ocr",
+                        extraction_method=page.ocr_result.engine,
+                        confidence=page.ocr_result.confidence,
+                        content_preview=page.ocr_result.text[:100],
+                    )
+                )
+
+        return records
+
+    def to_checkpoint_dict(self) -> dict[str, Any]:
+        return self.model_dump()
+
+    @classmethod
+    def from_checkpoint_dict(cls, data: dict[str, Any]) -> "ProcessingContext":
+        return cls.model_validate(data)
+

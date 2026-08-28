@@ -3,7 +3,14 @@ from ai_rfp_excel.app.ingestion.pdf.image_extractor import (
     extract_images_from_pdf,
     has_images,
 )
-from ai_rfp_excel.app.ingestion.pdf.processor import process_batch, process_page, process_pdf
+from ai_rfp_excel.app.ingestion.pdf.processor import (
+    load_checkpoint,
+    process_batch,
+    process_page,
+    process_pdf,
+    retry_failed_pages,
+    save_checkpoint,
+)
 from ai_rfp_excel.app.ingestion.pdf.router import PageRouter
 from ai_rfp_excel.app.ingestion.pdf.table_extractor import (
     extract_tables_from_page,
@@ -31,7 +38,11 @@ __all__ = [
     "has_tables",
     "has_text_content",
     "is_duplicate",
+    "load_checkpoint",
     "process_batch",
     "process_page",
     "process_pdf",
+    "retry_failed_pages",
+    "save_checkpoint",
 ]
+

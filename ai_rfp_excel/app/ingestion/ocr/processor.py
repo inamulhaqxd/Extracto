@@ -71,6 +71,44 @@ def ocr_with_tesseract(image_path: str) -> OCRResult:
         )
 
 
+def ocr_with_paddleocr(image_path: str) -> OCRResult:
+    try:
+        from paddleocr import PaddleOCR
+
+
+        ocr = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
+        result = ocr.ocr(image_path, cls=True)
+
+        texts: list[str] = []
+        confidences: list[float] = []
+
+        if result:
+            for line in result:
+                if not line:
+                    continue
+                for item in line:
+                    if len(item) >= 2 and isinstance(item[1], (tuple, list)):
+                        txt, conf = item[1][0], float(item[1][1])
+                        texts.append(str(txt))
+                        confidences.append(conf)
+
+        avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
+
+        return OCRResult(
+            page_number=0,
+            text="\n".join(texts).strip(),
+            confidence=avg_conf,
+            engine="paddleocr",
+        )
+    except Exception:
+        return OCRResult(
+            page_number=0,
+            text="",
+            confidence=0.0,
+            engine="paddleocr",
+        )
+
+
 def ocr_page(
     pdf_path: str,
     page_number: int,
@@ -80,8 +118,14 @@ def ocr_page(
     image_path = render_page_to_image(pdf_path, page_number, output_dir)
 
     result = ocr_with_tesseract(image_path)
-    result.page_number = page_number
 
+    # PaddleOCR fallback when Tesseract quality is low or empty
+    if result.confidence < min_confidence or not result.text.strip():
+        paddle_result = ocr_with_paddleocr(image_path)
+        if paddle_result.confidence > result.confidence or (paddle_result.text.strip() and not result.text.strip()):
+            result = paddle_result
+
+    result.page_number = page_number
     return result
 
 
@@ -91,3 +135,4 @@ def needs_ocr(pdf_path: str, page_number: int, text_threshold: int = 50) -> bool
     text = page.get_text()
     doc.close()
     return len(text.strip()) < text_threshold
+

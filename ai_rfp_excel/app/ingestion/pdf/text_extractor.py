@@ -7,6 +7,15 @@ def extract_text_from_page(pdf_path: str, page_number: int) -> ExtractedText:
     doc = fitz.open(pdf_path)
     page = doc[page_number]
     text = page.get_text()
+    rect = page.rect
+    bbox = {
+        "x0": round(float(rect.x0), 2),
+        "top": round(float(rect.y0), 2),
+        "x1": round(float(rect.x1), 2),
+        "bottom": round(float(rect.y1), 2),
+        "width": round(float(rect.width), 2),
+        "height": round(float(rect.height), 2),
+    }
     doc.close()
 
     return ExtractedText(
@@ -14,7 +23,9 @@ def extract_text_from_page(pdf_path: str, page_number: int) -> ExtractedText:
         text=text.strip(),
         source="native_pdf",
         confidence=1.0 if text.strip() else 0.0,
+        bbox=bbox,
     )
+
 
 
 def extract_text_from_pdf(pdf_path: str) -> list[ExtractedText]:
