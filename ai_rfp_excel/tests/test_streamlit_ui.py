@@ -69,6 +69,43 @@ def test_api_client_initialization_and_token() -> None:
     assert url == "http://localhost:8000/excel/download/test_file.xlsx"
 
 
+def test_api_client_login_success() -> None:
+    client = APIClient(base_url="http://localhost:8000")
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "access_token": "mock-token-xyz",
+        "user": {"id": "u1", "username": "evaluator", "is_admin": False},
+    }
+
+    with patch("httpx.Client") as mock_client_cls:
+        mock_instance = MagicMock()
+        mock_instance.post.return_value = mock_resp
+        mock_client_cls.return_value.__enter__.return_value = mock_instance
+
+        success, res = client.login("evaluator", "password123")
+        assert success is True
+        assert isinstance(res, dict)
+        assert res["access_token"] == "mock-token-xyz"
+        assert client.token == "mock-token-xyz"
+
+
+def test_api_client_login_failure() -> None:
+    client = APIClient(base_url="http://localhost:8000")
+    mock_resp = MagicMock()
+    mock_resp.status_code = 401
+    mock_resp.json.return_value = {"detail": "Invalid credentials"}
+
+    with patch("httpx.Client") as mock_client_cls:
+        mock_instance = MagicMock()
+        mock_instance.post.return_value = mock_resp
+        mock_client_cls.return_value.__enter__.return_value = mock_instance
+
+        success, res = client.login("wrong_user", "wrong_pass")
+        assert success is False
+        assert res == "Invalid credentials"
+
+
 def test_api_client_get_me_success() -> None:
     client = APIClient(base_url="http://localhost:8000", token="valid-jwt-token")
 
@@ -117,6 +154,54 @@ def test_api_client_get_me_no_token() -> None:
     assert client.get_me() is None
 
 
-def test_workspace_view_module_importable() -> None:
+def test_api_client_list_runs() -> None:
+    client = APIClient(base_url="http://localhost:8000", token="test-token")
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = [
+        {"run_id": "run-1", "status": "completed", "total_requirements": 10},
+        {"run_id": "run-2", "status": "processing", "total_requirements": 5},
+    ]
+
+    with patch("httpx.Client") as mock_client_cls:
+        mock_instance = MagicMock()
+        mock_instance.get.return_value = mock_resp
+        mock_client_cls.return_value.__enter__.return_value = mock_instance
+
+        runs = client.list_runs(status_filter="Completed")
+        assert len(runs) == 2
+        assert runs[0]["run_id"] == "run-1"
+        mock_instance.get.assert_called_once_with(
+            "http://localhost:8000/runs",
+            params={"status": "completed"},
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+
+def test_api_client_set_model_preference() -> None:
+    client = APIClient(base_url="http://localhost:8000", token="test-token")
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+
+    with patch("httpx.Client") as mock_client_cls:
+        mock_instance = MagicMock()
+        mock_instance.put.return_value = mock_resp
+        mock_client_cls.return_value.__enter__.return_value = mock_instance
+
+        ok = client.set_model_preference("qwen3:4b")
+        assert ok is True
+        mock_instance.put.assert_called_once_with(
+            "http://localhost:8000/ai/preference",
+            json={"model_tag": "qwen3:4b"},
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+
+def test_views_modules_importable() -> None:
+    from ai_rfp_excel.frontend.views.history import render_history
+    from ai_rfp_excel.frontend.views.settings import render_settings
     from ai_rfp_excel.frontend.views.workspace import render_workspace
+
     assert callable(render_workspace)
+    assert callable(render_history)
+    assert callable(render_settings)

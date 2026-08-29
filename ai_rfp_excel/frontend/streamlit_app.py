@@ -8,13 +8,14 @@ from ai_rfp_excel.frontend.api_client import APIClient
 from ai_rfp_excel.frontend.components import (
     inject_custom_css,
     render_error_card,
-    render_header,
     render_health_indicator,
 )
+from ai_rfp_excel.frontend.views.history import render_history
+from ai_rfp_excel.frontend.views.settings import render_settings
+from ai_rfp_excel.frontend.views.workspace import render_workspace
 
 st.set_page_config(
     page_title="AI RFP Excel Automation System",
-    page_icon="assets/logo.png" if False else None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -35,6 +36,10 @@ if "authenticated" not in st.session_state:
     st.session_state["user_info"] = None
     st.session_state["current_run_id"] = None
     st.session_state["cookie_checked"] = False
+    st.session_state["active_nav"] = "RFP Workspace"
+
+if "active_nav" not in st.session_state:
+    st.session_state["active_nav"] = "RFP Workspace"
 
 # Cookie Manager for 30-day "Remember Me" persistence
 cookie_manager = stx.CookieManager(key="rfp_auth_cookie_manager")
@@ -159,7 +164,7 @@ if not st.session_state["authenticated"]:
 
 
 # ==========================================
-# AUTHENTICATED: Sidebar & Dashboard
+# AUTHENTICATED: Sidebar Shell & Navigation
 # ==========================================
 
 # Health Indicator in Sidebar
@@ -175,6 +180,32 @@ st.sidebar.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+# Navigation Menu via sac.menu
+nav_items = [
+    sac.MenuItem("RFP Workspace", icon="kanban"),
+    sac.MenuItem("History", icon="clock-history"),
+    sac.MenuItem("Settings", icon="gear"),
+]
+
+# Find current index
+nav_names = ["RFP Workspace", "History", "Settings"]
+current_nav = st.session_state.get("active_nav", "RFP Workspace")
+nav_index = nav_names.index(current_nav) if current_nav in nav_names else 0
+
+selected_nav = sac.menu(
+    items=nav_items,
+    index=nav_index,
+    format_func=None,
+    size="sm",
+    key="sidebar_navigation_menu",
+)
+
+if selected_nav and selected_nav != st.session_state.get("active_nav"):
+    st.session_state["active_nav"] = selected_nav
+    st.rerun()
+
+st.sidebar.markdown("<div style='margin-top: auto; padding-top: 40px;'></div>", unsafe_allow_html=True)
 
 # User Profile Badge & Sign Out in Sidebar Footer
 user_info = st.session_state.get("user_info") or {}
@@ -205,32 +236,21 @@ if st.sidebar.button("Sign Out", use_container_width=True, type="secondary"):
     st.session_state["authenticated"] = False
     st.session_state["token"] = None
     st.session_state["user_info"] = None
+    st.session_state["active_nav"] = "RFP Workspace"
     client.set_token(None)
     st.rerun()
 
-# Main Dashboard Landing (When logged in)
-render_header(
-    title="RFP Evaluation Workspace",
-    subtitle="Automate technical compliance evaluation between vendor specifications and RFP response sheets.",
-    tag_text="System Active",
-)
 
-col_a, col_b, col_c = st.columns(3)
+# ==========================================
+# AUTHENTICATED: Main View Router
+# ==========================================
+active_tab = st.session_state.get("active_nav", "RFP Workspace")
 
-with col_a:
-    with st.container(border=True):
-        st.markdown('<div style="font-size: 16px; font-weight: 700; color: #0f172a;">New Evaluation</div>', unsafe_allow_html=True)
-        st.markdown('<p style="font-size: 13px; color: #64748b; min-height: 40px;">Upload PDF datasheets and Excel RFP sheets to start automated evaluation.</p>', unsafe_allow_html=True)
-        st.page_link("pages/1_Upload.py", label="Open Upload & Configure", icon=":material/upload_file:")
-
-with col_b:
-    with st.container(border=True):
-        st.markdown('<div style="font-size: 16px; font-weight: 700; color: #0f172a;">Review & Approvals</div>', unsafe_allow_html=True)
-        st.markdown('<p style="font-size: 13px; color: #64748b; min-height: 40px;">Inspect specification citations, review AI confidence, and override decisions.</p>', unsafe_allow_html=True)
-        st.page_link("pages/3_Review.py", label="Open Review Workspace", icon=":material/fact_check:")
-
-with col_c:
-    with st.container(border=True):
-        st.markdown('<div style="font-size: 16px; font-weight: 700; color: #0f172a;">Evaluation History</div>', unsafe_allow_html=True)
-        st.markdown('<p style="font-size: 13px; color: #64748b; min-height: 40px;">View past evaluation runs, download populated Excel files, and check analytics.</p>', unsafe_allow_html=True)
-        st.page_link("pages/4_History.py", label="Open Run History", icon=":material/history:")
+if active_tab == "RFP Workspace":
+    render_workspace(client)
+elif active_tab == "History":
+    render_history(client)
+elif active_tab == "Settings":
+    render_settings(client)
+else:
+    render_workspace(client)
