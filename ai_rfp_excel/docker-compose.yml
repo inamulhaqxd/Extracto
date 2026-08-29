@@ -1,4 +1,4 @@
-version: "3.8"
+version: "3.9"
 
 services:
   postgres:
@@ -7,13 +7,12 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-tender_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tender_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tender_pass}
       POSTGRES_DB: ${POSTGRES_DB:-tender_db}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backups:/backups
     networks:
       - tender_network
     healthcheck:
@@ -22,74 +21,96 @@ services:
       timeout: 5s
       retries: 5
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: tender_ollama
-    restart: unless-stopped
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - tender_network
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    environment:
-      - OLLAMA_PARALLEL=${OLLAMA_PARALLEL:-2}
-      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-5m}
-
-  fastapi:
+  api:
     build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: tender_fastapi
+      context: ..
+      dockerfile: ai_rfp_excel/Dockerfile
+    container_name: tender_api
     restart: unless-stopped
     ports:
-      - "${FASTAPI_PORT:-8000}:8000"
+      - "${API_PORT:-8000}:8000"
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tender_user}:${POSTGRES_PASSWORD:-tender_password}@postgres:5432/${POSTGRES_DB:-tender_db}
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - UPLOAD_DIR=/app/data/uploads
-      - PROCESSED_DIR=/app/data/processed
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tender_user}:${POSTGRES_PASSWORD:-tender_pass}@postgres:5432/${POSTGRES_DB:-tender_db}
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
     volumes:
-      - ./data/uploads:/app/data/uploads
-      - ./data/processed:/app/data/processed
-      - ./data/extracted:/app/data/extracted
-      - ./data/images:/app/data/images
-      - ./data/ocr:/app/data/ocr
-      - ./data/generated:/app/data/generated
-    networks:
-      - tender_network
+      - ../ai_rfp_excel:/app/ai_rfp_excel
+      - upload_data:/app/data/uploads
+      - extracted_data:/app/data/extracted
+      - image_data:/app/data/images
+      - ocr_data:/app/data/ocr
+      - processed_data:/app/data/processed
+      - generated_data:/app/data/generated
+    command: ["uvicorn", "ai_rfp_excel.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
+    networks:
+      - tender_network
 
   streamlit:
     build:
-      context: .
-      dockerfile: Dockerfile.streamlit
+      context: ..
+      dockerfile: ai_rfp_excel/Dockerfile.frontend
     container_name: tender_streamlit
     restart: unless-stopped
     ports:
       - "${STREAMLIT_PORT:-8501}:8501"
+    env_file:
+      - .env
     environment:
-      - FASTAPI_URL=http://fastapi:8000
+      API_BASE_URL: http://api:8000
+    volumes:
+      - ../ai_rfp_excel:/app/ai_rfp_excel
+      - ../ai_rfp_excel/frontend:/app/frontend
+      - ../.streamlit:/app/.streamlit
+    command: ["python", "-m", "streamlit", "run", "frontend/streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.runOnSave=true", "--server.fileWatcherType=poll"]
+    depends_on:
+      - api
     networks:
       - tender_network
-    depends_on:
-      - fastapi
 
-volumes:
-  postgres_data:
-  ollama_data:
+  backup:
+    image: postgres:16-alpine
+    container_name: tender_backup
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-tender_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tender_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-tender_db}
+      BACKUP_DIR: /backups
+      RETENTION_DAYS: 14
+    volumes:
+      - backups_data:/backups
+    entrypoint: |
+      /bin/sh -c '
+      while true; do
+        TIMESTAMP=$$(date +"%Y%m%d_%H%M%S")
+        echo "[Automated Backup] Starting daily pg_dump to /backups/tender_db_backup_$${TIMESTAMP}.sql.gz..."
+        PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -h $$POSTGRES_HOST -U $$POSTGRES_USER -d $$POSTGRES_DB | gzip > /backups/tender_db_backup_$${TIMESTAMP}.sql.gz
+        find /backups -name "tender_db_backup_*.sql.gz" -mtime +14 -delete
+        echo "[Automated Backup] Sleeping for 24 hours until next scheduled backup..."
+        sleep 86400
+      done'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tender_network
 
 networks:
   tender_network:
     driver: bridge
+
+volumes:
+  postgres_data:
+  backups_data:
+  upload_data:
+  extracted_data:
+  image_data:
+  ocr_data:
+  processed_data:
+  generated_data:
+

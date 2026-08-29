@@ -1,30 +1,71 @@
-from pydantic_settings import BaseSettings
-from typing import Optional
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://tender_user:tender_password@localhost:5432/tender_db"
-    ollama_base_url: str = "http://localhost:11434"
-    upload_dir: str = "./data/uploads"
-    processed_dir: str = "./data/processed"
-    extracted_dir: str = "./data/extracted"
-    images_dir: str = "./data/images"
-    ocr_dir: str = "./data/ocr"
-    generated_dir: str = "./data/generated"
-    secret_key: str = "change-in-production"
-    default_model: str = "llama3.2:3b"
-    available_models: str = "qwen3:4b,qwen2.5:3b,phi3.5:3.8b,gemma3:4b,llama3.2:3b"
-    max_pdf_size: int = 104857600
-    max_excel_size: int = 52428800
-    batch_size: int = 10
-    llm_timeout: int = 120
-    ocr_timeout: int = 60
-    high_confidence_threshold: float = 0.90
-    low_confidence_threshold: float = 0.70
-    log_level: str = "INFO"
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    class Config:
-        env_file = ".env"
+    APP_NAME: str = "AI RFP Excel Generator"
+    APP_ENV: str = "development"
+    DEBUG: bool = True
+    LOG_LEVEL: str = "INFO"
+
+    POSTGRES_USER: str = "tender_user"
+    POSTGRES_PASSWORD: str = "tender_pass"
+    POSTGRES_DB: str = "tender_db"
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+
+    DATABASE_URL: str = "postgresql+asyncpg://tender_user:tender_pass@localhost:5432/tender_db"
+
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_TEXT_MODEL: str = "qwen2.5:3b"
+    OLLAMA_VISION_MODEL: str = "llava"
+    OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
+    DEFAULT_LLM_MODEL: str = "qwen3:4b"
+    LLM_TEMPERATURE: float = 0.1
+    LLM_TIMEOUT_SECONDS: int = 120
+    OLLAMA_KEEP_ALIVE: str = "5m"
+    OLLAMA_NUM_PARALLEL: int = 2
+
+
+    API_HOST: str = "0.0.0.0"
+    API_PORT: int = 8000
+
+    UPLOAD_DIR: str = "./data/uploads"
+    EXTRACTED_DIR: str = "./data/extracted"
+    IMAGES_DIR: str = "./data/images"
+    OCR_DIR: str = "./data/ocr"
+    PROCESSED_DIR: str = "./data/processed"
+    GENERATED_DIR: str = "./data/generated"
+    OUTPUT_DIR: str = "./data/generated"
+
+
+    CONFIDENCE_HIGH_THRESHOLD: float = 0.90
+    CONFIDENCE_MEDIUM_THRESHOLD: float = 0.70
+    MAX_FILE_SIZE_MB: int = 100
+    OCR_CONFIDENCE_THRESHOLD: float = 0.60
+
+    SECRET_KEY: str = "change-me-in-production"
+    ALLOWED_EXTENSIONS: str = ".pdf,.xlsx,.xls"
+
+    @property
+    def ALLOWED_EXTENSIONS_LIST(self) -> list[str]:
+        return [ext.strip() for ext in self.ALLOWED_EXTENSIONS.split(",")]
+
+    def ensure_data_dirs(self) -> None:
+        for dir_attr in [
+            self.UPLOAD_DIR,
+            self.EXTRACTED_DIR,
+            self.IMAGES_DIR,
+            self.OCR_DIR,
+            self.PROCESSED_DIR,
+            self.GENERATED_DIR,
+            self.OUTPUT_DIR,
+        ]:
+            Path(dir_attr).mkdir(parents=True, exist_ok=True)
+
 
 
 settings = Settings()

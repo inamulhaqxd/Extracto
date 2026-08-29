@@ -2,16 +2,19 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
-    libmagic1 \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY ai_rfp_excel/requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --default-timeout=300 --retries=5 -r requirements.txt
 
 COPY . .
+ENV PYTHONPATH="/app"
+
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "ai_rfp_excel.app.main:app", "--host", "0.0.0.0", "--port", "8000"]

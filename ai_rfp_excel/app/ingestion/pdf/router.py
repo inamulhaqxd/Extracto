@@ -1,77 +1,47 @@
-from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Optional
-
-from app.document.processing_context import PageContent
-
-
-class PDFParser(ABC):
-    @abstractmethod
-    def can_parse(self, page_number: int) -> bool:
-        pass
-
-    @abstractmethod
-    def parse(self, pdf_path: str, page_number: int) -> Optional[PageContent]:
-        pass
+from ai_rfp_excel.app.ingestion.models import PageType
+from ai_rfp_excel.app.ingestion.ocr.processor import needs_ocr
+from ai_rfp_excel.app.ingestion.pdf.image_extractor import has_images
+from ai_rfp_excel.app.ingestion.pdf.table_extractor import has_tables
+from ai_rfp_excel.app.ingestion.pdf.text_extractor import has_text_content
 
 
-class PyMuPDFParser(PDFParser):
-    def can_parse(self, page_number: int) -> bool:
-        return True
+class PageRouter:
+    def detect_page_type(self, pdf_path: str, page_number: int) -> list[PageType]:
+        page_types: list[PageType] = []
 
-    def parse(self, pdf_path: str, page_number: int) -> Optional[PageContent]:
-        import fitz
+        has_text = has_text_content(pdf_path, page_number)
+        has_tbl = has_tables(pdf_path, page_number)
+        has_img = has_images(pdf_path, page_number)
+        needs_ocr_page = needs_ocr(pdf_path, page_number)
 
-        doc = fitz.open(pdf_path)
-        if page_number >= len(doc):
-            doc.close()
-            return None
+        if has_text:
+            page_types.append(PageType.NATIVE_TEXT)
+        if has_tbl:
+            page_types.append(PageType.TABLE)
+        if has_img:
+            page_types.append(PageType.IMAGE)
+        if needs_ocr_page:
+            page_types.append(PageType.SCANNED)
 
-        page = doc[page_number]
-        text = page.get_text()
+        if len(page_types) > 1:
+            return [PageType.MIXED]
+        elif not page_types:
+            return [PageType.NATIVE_TEXT]
+        else:
+            return page_types
 
-        doc.close()
+    def should_extract_text(self, pdf_path: str, page_number: int) -> bool:
+        page_types = self.detect_page_type(pdf_path, page_number)
+        return PageType.NATIVE_TEXT in page_types or PageType.MIXED in page_types
 
-        if not text.strip():
-            return None
+    def should_extract_tables(self, pdf_path: str, page_number: int) -> bool:
+        page_types = self.detect_page_type(pdf_path, page_number)
+        return PageType.TABLE in page_types or PageType.MIXED in page_types
 
-        return PageContent(
-            page_number=page_number + 1,
-            content_type="text",
-            text=text,
-            extraction_method="pymupdf",
-            confidence=1.0,
-        )
+    def should_extract_images(self, pdf_path: str, page_number: int) -> bool:
+        page_types = self.detect_page_type(pdf_path, page_number)
+        return PageType.IMAGE in page_types or PageType.MIXED in page_types
 
-
-class PDFRouter:
-    def __init__(self):
-        self.parsers: list[PDFParser] = [PyMuPDFParser()]
-
-    def add_parser(self, parser: PDFParser):
-        self.parsers.append(parser)
-
-    def parse_page(self, pdf_path: str, page_number: int) -> list[PageContent]:
-        results = []
-
-        for parser in self.parsers:
-            if parser.can_parse(page_number):
-                result = parser.parse(pdf_path, page_number)
-                if result:
-                    results.append(result)
-
-        return results
-
-    def parse_all_pages(self, pdf_path: str) -> list[PageContent]:
-        import fitz
-
-        doc = fitz.open(pdf_path)
-        page_count = len(doc)
-        doc.close()
-
-        all_pages = []
-        for page_num in range(page_count):
-            page_results = self.parse_page(pdf_path, page_num)
-            all_pages.extend(page_results)
-
-        return all_pages
+    def should_run_ocr(self, pdf_path: str, page_number: int) -> bool:
+        page_types = self.detect_page_type(pdf_path, page_number)
+        return PageType.SCANNED in page_types or PageType.MIXED in page_types

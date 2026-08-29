@@ -1,472 +1,226 @@
-import os
-import time
-from datetime import datetime
-from typing import Optional
+import datetime
 
-import httpx
+import extra_streamlit_components as stx
 import streamlit as st
+import streamlit_antd_components as sac
 
-FASTAPI_URL = os.getenv("FASTAPI_URL", "http://localhost:8000")
+from ai_rfp_excel.frontend.api_client import APIClient
+from ai_rfp_excel.frontend.components import (
+    inject_custom_css,
+    render_error_card,
+)
+from ai_rfp_excel.frontend.views.history import render_history
+from ai_rfp_excel.frontend.views.settings import render_settings
+from ai_rfp_excel.frontend.views.workspace import render_workspace
 
 st.set_page_config(
-    page_title="AI RFP Excel Generator",
-    page_icon=":bar_chart:",
+    page_title="TenderFlow",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
+# Inject Enterprise CSS Design System
+inject_custom_css()
 
-def init_session_state():
-    defaults = {
-        "token": None,
-        "user": None,
-        "current_page": "upload",
-        "processing_run_id": None,
-        "processing_status": None,
-    }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
+# Initialize API Client
+if "api_client" not in st.session_state:
+    st.session_state["api_client"] = APIClient()
 
+client: APIClient = st.session_state["api_client"]
 
-init_session_state()
+# Initialize Session State
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+    st.session_state["token"] = None
+    st.session_state["user_info"] = None
+    st.session_state["current_run_id"] = None
+    st.session_state["cookie_checked"] = False
+    st.session_state["active_nav"] = "Dashboard"
 
+if "active_nav" not in st.session_state:
+    st.session_state["active_nav"] = "Dashboard"
 
-def api_request(method: str, endpoint: str, data: dict = None, files: dict = None) -> Optional[dict]:
-    headers = {}
-    if st.session_state.token:
-        headers["Authorization"] = f"Bearer {st.session_state.token}"
+# Cookie Manager for 30-day "Remember Me" persistence
+cookie_manager = stx.CookieManager(key="rfp_auth_cookie_manager")
 
-    try:
-        url = f"{FASTAPI_URL}{endpoint}"
-        if method == "GET":
-            response = httpx.get(url, headers=headers, timeout=30.0)
-        elif method == "POST":
-            response = httpx.post(url, json=data, headers=headers, timeout=30.0)
-        elif method == "DELETE":
-            response = httpx.delete(url, headers=headers, timeout=30.0)
+# Check and restore active session from cookie on initial load
+if not st.session_state["authenticated"] and not st.session_state["cookie_checked"]:
+    stored_token = cookie_manager.get(cookie="rfp_auth_token")
+    if stored_token and isinstance(stored_token, str):
+        client.set_token(stored_token)
+        user = client.get_me()
+        if user:
+            st.session_state["authenticated"] = True
+            st.session_state["token"] = stored_token
+            st.session_state["user_info"] = user
+            st.session_state["cookie_checked"] = True
+            st.rerun()
         else:
-            return None
-
-        if response.status_code == 200 or response.status_code == 201:
-            return response.json()
-        elif response.status_code == 401:
-            st.session_state.token = None
-            st.session_state.user = None
-            st.error("Session expired. Please log in again.")
-            return None
-        else:
-            st.error(f"API Error: {response.status_code} - {response.text}")
-            return None
-    except Exception as e:
-        st.error(f"Connection error: {str(e)}")
-        return None
+            cookie_manager.delete(cookie="rfp_auth_token", key="del_expired_cookie")
+            client.set_token(None)
+            st.session_state["cookie_checked"] = True
 
 
-def login_page():
-    st.title("AI RFP Excel Generator")
-    st.markdown("---")
+# ==========================================
+# UNAUTHENTICATED: Full-Screen Login Gate
+# ==========================================
+if not st.session_state["authenticated"]:
+    # Lock down view: hide sidebar navigation completely
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"] { display: none !important; }
+        [data-testid="stSidebarNav"] { display: none !important; }
+        [data-testid="collapsedControl"] { display: none !important; }
+        .block-container { max-width: 100% !important; padding-top: 1rem !important; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    col1, col2, col3 = st.columns([1, 2, 1])
+    # Top-Left TenderFlow Brand Mark
+    st.markdown(
+        """
+        <div style="padding: 12px 24px; display: flex; align-items: center; gap: 8px;">
+            <span style="width: 5px; height: 18px; background-color: var(--theme-button-bg); border-radius: 1px; display: inline-block;"></span>
+            <span style="font-size: 14px; font-weight: 800; letter-spacing: 0.08em; color: var(--theme-text-primary); text-transform: uppercase;">
+                TENDERFLOW
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    with col2:
-        tab_login, tab_register = st.tabs(["Login", "Register"])
+    # Centered Minimalist Login Container
+    _, center_col, _ = st.columns([1, 1.2, 1])
 
-        with tab_login:
-            st.subheader("Login")
-            email = st.text_input("Email", key="login_email")
-            password = st.text_input("Password", type="password", key="login_password")
-
-            if st.button("Login", use_container_width=True):
-                if email and password:
-                    result = api_request("POST", "/auth/login", {
-                        "email": email,
-                        "password": password,
-                    })
-                    if result:
-                        st.session_state.token = result["access_token"]
-                        st.session_state.user = result["user"]
-                        st.rerun()
-                else:
-                    st.warning("Please enter email and password")
-
-        with tab_register:
-            st.subheader("Register")
-            name = st.text_input("Name", key="register_name")
-            email = st.text_input("Email", key="register_email")
-            password = st.text_input("Password", type="password", key="register_password")
-            confirm_password = st.text_input("Confirm Password", type="password", key="register_confirm")
-
-            if st.button("Register", use_container_width=True):
-                if name and email and password:
-                    if password != confirm_password:
-                        st.error("Passwords do not match")
-                    else:
-                        result = api_request("POST", "/auth/register", {
-                            "name": name,
-                            "email": email,
-                            "password": password,
-                        })
-                        if result:
-                            st.session_state.token = result["access_token"]
-                            st.session_state.user = result["user"]
-                            st.success("Registration successful!")
-                            st.rerun()
-                else:
-                    st.warning("Please fill in all fields")
-
-
-def check_health():
-    try:
-        response = httpx.get(f"{FASTAPI_URL}/health", timeout=5.0)
-        return response.json()
-    except Exception:
-        return {"status": "unreachable"}
-
-
-def sidebar():
-    with st.sidebar:
-        st.header("System Status")
-        health = check_health()
-
-        if health.get("status") == "healthy":
-            st.success("System: Healthy")
-        elif health.get("status") == "degraded":
-            st.warning("System: Degraded")
-        else:
-            st.error("System: Unreachable")
-
-        if health.get("ollama") == "healthy":
-            st.success("Ollama: Connected")
-        else:
-            st.error("Ollama: Disconnected")
-
-        if health.get("database") == "healthy":
-            st.success("Database: Connected")
-        else:
-            st.error("Database: Disconnected")
-
-        st.markdown("---")
-
-        if st.session_state.user:
-            st.info(f"Logged in as: {st.session_state.user.get('name', 'User')}")
-            if st.session_state.user.get("is_admin"):
-                st.caption("Admin")
-
-            if st.button("Logout"):
-                st.session_state.token = None
-                st.session_state.user = None
-                st.rerun()
-
-
-def upload_page():
-    st.header("Upload Files")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        pdf_file = st.file_uploader("Reference PDF", type=["pdf"])
-
-    with col2:
-        excel_file = st.file_uploader("Excel Template", type=["xlsx", "xls"])
-
-    st.markdown("---")
-
-    col_model1, col_model2 = st.columns([2, 1])
-
-    with col_model1:
-        models = [
-            "qwen3:4b",
-            "qwen2.5:3b",
-            "phi3.5:3.8b",
-            "gemma3:4b",
-            "llama3.2:3b",
-        ]
-        model_labels = {
-            "qwen3:4b": "Qwen 3 4B - 2.5GB RAM, 262K context",
-            "qwen2.5:3b": "Qwen 2.5 3B - 1.8GB RAM, 32K context",
-            "phi3.5:3.8b": "Phi-3.5 Mini 3.8B - 2.2GB RAM, 128K context",
-            "gemma3:4b": "Gemma 3 4B - 2.4GB RAM, 32K context",
-            "llama3.2:3b": "Llama 3.2 3B - 1.7GB RAM, 128K context",
-        }
-
-        selected_model = st.selectbox(
-            "AI Model",
-            models,
-            format_func=lambda x: model_labels.get(x, x),
-            index=0,
+    with center_col:
+        st.markdown(
+            """
+            <div style="margin-top: 50px; margin-bottom: 28px;">
+                <div style="font-size: 32px; font-weight: 400; letter-spacing: -0.03em; color: var(--theme-text-primary); margin-bottom: 6px; line-height: 1.2;">
+                    Welcome back
+                </div>
+                <div style="font-size: 14px; color: var(--theme-text-subtle); font-weight: 400;">
+                    Please enter your details to sign in.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
-    with col_model2:
-        st.markdown("&nbsp;")
-        st.caption("Select model for processing")
+        with st.form("tenderflow_login_form", clear_on_submit=False):
+            username = st.text_input("EMAIL ADDRESS", placeholder="email@example.com")
+            password = st.text_input("PASSWORD", type="password", placeholder="••••••••")
 
-    if pdf_file and excel_file:
-        st.success(f"PDF: {pdf_file.name} | Excel: {excel_file.name}")
+            remember_me = st.checkbox("Remember me", value=True)
 
-        if st.button("Start Processing", type="primary", use_container_width=True):
-            with st.spinner("Uploading files..."):
-                files = {
-                    "pdf": (pdf_file.name, pdf_file.getvalue(), "application/pdf"),
-                    "excel": (excel_file.name, excel_file.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
-                }
+            st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+            submit = st.form_submit_button("SIGN IN", type="primary", use_container_width=True)
 
-                try:
-                    headers = {}
-                    if st.session_state.token:
-                        headers["Authorization"] = f"Bearer {st.session_state.token}"
+            if submit:
+                if not username or not password:
+                    render_error_card("Validation Error", "Please enter your email address and password.")
+                else:
+                    success, res = client.login(username, password)
+                    if success and isinstance(res, dict):
+                        token = res.get("access_token")
+                        user_data = res.get("user")
 
-                    response = httpx.post(
-                        f"{FASTAPI_URL}/process",
-                        files=files,
-                        data={"model": selected_model},
-                        headers=headers,
-                        timeout=60.0,
-                    )
+                        st.session_state["authenticated"] = True
+                        st.session_state["token"] = token
+                        st.session_state["user_info"] = user_data
+                        client.set_token(token)
 
-                    if response.status_code == 200:
-                        result = response.json()
-                        st.session_state.processing_run_id = result.get("run_id")
-                        st.session_state.processing_status = "processing"
-                        st.success("Processing started!")
+                        if remember_me and token:
+                            expires = datetime.datetime.now() + datetime.timedelta(days=30)
+                            cookie_manager.set(
+                                cookie="rfp_auth_token",
+                                val=token,
+                                expires_at=expires,
+                                key="set_auth_token_cookie",
+                            )
+
+                        st.toast("Signed in successfully.")
                         st.rerun()
                     else:
-                        st.error(f"Failed to start processing: {response.text}")
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
+                        error_msg = str(res)
+                        render_error_card(
+                            "Authentication Failed",
+                            error_msg,
+                            "Verify your credentials or contact system administrator.",
+                        )
+
+    st.stop()
 
 
-def processing_page():
-    run_id = st.session_state.processing_run_id
+# ==========================================
+# AUTHENTICATED: Sidebar Shell & Navigation
+# ==========================================
+with st.sidebar:
+    # Top Minimalist Brand Header
+    st.markdown(
+        """
+        <div style="padding: 6px 0 18px 0; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--theme-border); margin-bottom: 16px;">
+            <span style="width: 5px; height: 18px; background-color: var(--theme-button-bg); border-radius: 1px; display: inline-block;"></span>
+            <span style="font-size: 15px; font-weight: 800; letter-spacing: 0.08em; color: var(--theme-text-primary); text-transform: uppercase;">
+                TENDERFLOW
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    if not run_id:
-        st.info("No processing job active. Upload files to start.")
-        return
+    # Navigation Menu via sac.menu inside Sidebar
+    nav_items = [
+        sac.MenuItem("Dashboard", icon="grid"),
+        sac.MenuItem("History", icon="clock-history"),
+        sac.MenuItem("Settings", icon="gear"),
+    ]
 
-    st.header("Processing")
+    # Find current index
+    nav_names = ["Dashboard", "History", "Settings"]
+    current_nav = st.session_state.get("active_nav", "Dashboard")
+    if current_nav == "RFP Workspace":
+        current_nav = "Dashboard"
+    nav_index = nav_names.index(current_nav) if current_nav in nav_names else 0
 
-    headers = {}
-    if st.session_state.token:
-        headers["Authorization"] = f"Bearer {st.session_state.token}"
+    selected_nav = sac.menu(
+        items=nav_items,
+        index=nav_index,
+        format_func=None,
+        size="sm",
+        key="sidebar_navigation_menu",
+    )
 
-    try:
-        resp = httpx.get(f"{FASTAPI_URL}/process/{run_id}/status", headers=headers, timeout=10.0)
-        status_data = resp.json()
-    except Exception:
-        status_data = {"status": "UNKNOWN", "progress": 0, "current_step": "Connecting..."}
+    if selected_nav and selected_nav != st.session_state.get("active_nav"):
+        st.session_state["active_nav"] = selected_nav
+        st.rerun()
 
-    progress = status_data.get("progress", 0)
-    step = status_data.get("current_step", "Waiting...")
-    status = status_data.get("status", "UNKNOWN")
+    # Spacer pushing Sign Out to the bottom
+    st.markdown("<div style='height: 380px;'></div>", unsafe_allow_html=True)
 
-    progress_bar = st.progress(progress)
-    status_text = st.empty()
-    status_text.text(step)
-
-    if status == "COMPLETED":
-        progress_bar.progress(1.0)
-        status_text.text("Done!")
-        st.success("Processing completed successfully!")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Review Results"):
-                st.session_state.current_page = "review"
-                st.rerun()
-        with col2:
-            try:
-                dl_resp = httpx.get(
-                    f"{FASTAPI_URL}/process/{run_id}/download",
-                    headers=headers,
-                    timeout=30.0,
-                    follow_redirects=True,
-                )
-                if dl_resp.status_code == 200:
-                    st.download_button(
-                        label="Download Excel",
-                        data=dl_resp.content,
-                        file_name=f"compliance_result_{run_id[:8]}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
-                else:
-                    st.error("Download not available yet")
-            except Exception as e:
-                st.error(f"Download error: {e}")
-
-    elif status == "FAILED":
-        progress_bar.progress(0)
-        st.error(f"Processing failed: {status_data.get('error_message', 'Unknown error')}")
-
-    else:
+    if st.button("Sign Out", use_container_width=True, type="secondary", key="btn_sign_out"):
+        cookie_manager.delete(cookie="rfp_auth_token", key="logout_delete_cookie")
+        st.session_state["authenticated"] = False
+        st.session_state["token"] = None
+        st.session_state["user_info"] = None
+        st.session_state["active_nav"] = "Dashboard"
+        client.set_token(None)
         st.rerun()
 
 
-def review_page():
-    st.header("Review Results")
+# ==========================================
+# AUTHENTICATED: Main View Router
+# ==========================================
+active_tab = st.session_state.get("active_nav", "Dashboard")
 
-    st.info("Review workflow will show compliance results with evidence")
+if active_tab in ("Dashboard", "RFP Workspace"):
+    render_workspace(client)
+elif active_tab == "History":
+    render_history(client)
+elif active_tab == "Settings":
+    render_settings(client)
+else:
+    render_workspace(client)
 
-    st.markdown("---")
-
-    st.subheader("Sample Review Item")
-
-    col1, col2, col3 = st.columns([3, 1, 1])
-
-    with col1:
-        st.markdown("**Requirement:** Minimum 32 cores per controller")
-        st.markdown("**Result:** COMPLIANT")
-        st.markdown("**Confidence:** 95%")
-        st.markdown("**Evidence:** 32 cores per controller found on Page 15, Table T15-02")
-
-    with col2:
-        if st.button("Approve", key="approve_1"):
-            st.success("Approved!")
-
-    with col3:
-        if st.button("Reject", key="reject_1"):
-            st.error("Rejected!")
-
-    st.markdown("---")
-
-    col_bulk1, col_bulk2, col_bulk3 = st.columns(3)
-
-    with col_bulk1:
-        if st.button("Approve All High Confidence"):
-            st.success("All high confidence results approved!")
-
-    with col_bulk2:
-        if st.button("Approve All Compliant"):
-            st.success("All compliant results approved!")
-
-    with col_bulk3:
-        if st.button("Generate Excel"):
-            st.info("Excel generation will be triggered")
-
-
-def history_page():
-    st.header("Processing History")
-
-    col1, col2 = st.columns([3, 1])
-
-    with col1:
-        search = st.text_input("Search by filename")
-
-    with col2:
-        st.markdown("&nbsp;")
-        filter_status = st.selectbox("Filter by status", ["All", "Completed", "Processing", "Failed"])
-
-    st.markdown("---")
-
-    st.info("Processing history will be loaded from the database")
-
-    sample_history = [
-        {"filename": "RFP_v1.pdf + Template_v1.xlsx", "status": "Completed", "date": "2026-08-25", "run_id": "1"},
-        {"filename": "RFP_v2.pdf + Template_v1.xlsx", "status": "Processing", "date": "2026-08-25", "run_id": "2"},
-    ]
-
-    for item in sample_history:
-        col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
-
-        with col1:
-            st.markdown(f"**{item['filename']}**")
-
-        with col2:
-            if item["status"] == "Completed":
-                st.success(item["status"])
-            elif item["status"] == "Processing":
-                st.warning(item["status"])
-            else:
-                st.error(item["status"])
-
-        with col3:
-            st.caption(item["date"])
-
-        with col4:
-            if st.button("View", key=f"view_{item['run_id']}"):
-                st.info(f"Viewing run {item['run_id']}")
-
-
-def settings_page():
-    st.header("Settings")
-
-    tab_model, tab_account = st.tabs(["AI Model", "Account"])
-
-    with tab_model:
-        st.subheader("AI Model Settings")
-
-        models = [
-            "qwen3:4b",
-            "qwen2.5:3b",
-            "phi3.5:3.8b",
-            "gemma3:4b",
-            "llama3.2:3b",
-        ]
-        model_labels = {
-            "qwen3:4b": "Qwen 3 4B - 2.5GB RAM, 262K context",
-            "qwen2.5:3b": "Qwen 2.5 3B - 1.8GB RAM, 32K context",
-            "phi3.5:3.8b": "Phi-3.5 Mini 3.8B - 2.2GB RAM, 128K context",
-            "gemma3:4b": "Gemma 3 4B - 2.4GB RAM, 32K context",
-            "llama3.2:3b": "Llama 3.2 3B - 1.7GB RAM, 128K context",
-        }
-
-        current_model = st.session_state.user.get("preferred_model", "qwen3:4b") if st.session_state.user else "qwen3:4b"
-
-        default_model = st.selectbox(
-            "Default Model",
-            models,
-            format_func=lambda x: model_labels.get(x, x),
-            index=models.index(current_model) if current_model in models else 0,
-        )
-
-        if st.button("Save Default Model"):
-            st.success(f"Default model saved: {default_model}")
-
-        st.markdown("---")
-
-        st.subheader("Model Availability")
-        st.info("Run `ollama pull <model>` to download models")
-
-        for model in models:
-            st.code(f"ollama pull {model}", language="bash")
-
-    with tab_account:
-        st.subheader("Account Settings")
-
-        if st.session_state.user:
-            st.info(f"Name: {st.session_state.user.get('name')}")
-            st.info(f"Email: {st.session_state.user.get('email')}")
-            st.info(f"Role: {'Admin' if st.session_state.user.get('is_admin') else 'User'}")
-
-        st.markdown("---")
-        st.caption("Contact admin to reset password")
-
-
-def main():
-    if not st.session_state.token:
-        login_page()
-        return
-
-    sidebar()
-
-    page = st.session_state.get("current_page", "upload")
-
-    if st.session_state.processing_status == "processing":
-        processing_page()
-        return
-
-    tab1, tab2, tab3, tab4 = st.tabs(["Upload", "Review", "History", "Settings"])
-
-    with tab1:
-        upload_page()
-
-    with tab2:
-        review_page()
-
-    with tab3:
-        history_page()
-
-    with tab4:
-        settings_page()
-
-
-if __name__ == "__main__":
-    main()

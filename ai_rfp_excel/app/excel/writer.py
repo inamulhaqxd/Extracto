@@ -1,143 +1,327 @@
-import copy
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import openpyxl
-from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 
-from app.matching.rules import ComplianceStatus
-from app.logging_config import get_logger
+from ai_rfp_excel.app.config import settings
+from ai_rfp_excel.app.excel.models import (
+    PopulationResult,
+    WorkbookAnalysis,
+)
+from ai_rfp_excel.app.excel.validator import ExcelValidator
+from ai_rfp_excel.app.logging import get_logger
+from ai_rfp_excel.app.matching.models import ComplianceDecision, ComplianceState
 
-logger = get_logger()
+logger = get_logger("excel.writer")
+
+# Soft highlight colors for compliance states (hex fill colors)
+STATUS_FILLS = {
+    ComplianceState.COMPLIANT: PatternFill(start_color="E2F0D9", end_color="E2F0D9", fill_type="solid"),
+    ComplianceState.NON_COMPLIANT: PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid"),
+    ComplianceState.PARTIALLY_COMPLIANT: PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"),
+    ComplianceState.AMBIGUOUS: PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"),
+    ComplianceState.NOT_FOUND: PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid"),
+}
+
+STATUS_LABELS = {
+    ComplianceState.COMPLIANT: "Compliant",
+    ComplianceState.NON_COMPLIANT: "Non-Compliant",
+    ComplianceState.PARTIALLY_COMPLIANT: "Partially Compliant",
+    ComplianceState.AMBIGUOUS: "Ambiguous",
+    ComplianceState.NOT_FOUND: "Not Found",
+}
 
 
 class ExcelWriter:
-    def __init__(self):
-        self.compliance_colors = {
-            ComplianceStatus.COMPLIANT: "92D050",
-            ComplianceStatus.PARTIALLY_COMPLIANT: "FFC000",
-            ComplianceStatus.NON_COMPLIANT: "FF0000",
-            ComplianceStatus.NOT_FOUND: "BFBFBF",
-            ComplianceStatus.AMBIGUOUS: "FF99FF",
-        }
+    """Populates RFP response workbooks with compliance decisions and evidence."""
 
-    def populate(
+    def __init__(self, output_dir: str | Path | None = None) -> None:
+        self.output_dir = Path(output_dir) if output_dir else Path(settings.OUTPUT_DIR)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.validator = ExcelValidator()
+
+    def populate_workbook(
         self,
-        template_path: str,
-        compliance_results: list[dict],
-        output_dir: str,
-    ) -> str:
-        wb = openpyxl.load_workbook(template_path)
+        template_path: str | Path,
+        analysis: WorkbookAnalysis,
+        decisions: list[ComplianceDecision],
+    ) -> PopulationResult:
+        """Populate template workbook with compliance results, preserving formatting and formulas."""
+        template_file = Path(template_path)
+        if not template_file.exists():
+            raise FileNotFoundError(f"Template workbook not found: {template_path}")
 
-        for result in compliance_results:
-            self._write_compliance_result(wb, result)
+        # Load original workbook preserving formulas (data_only=False)
+        wb = openpyxl.load_workbook(template_file, data_only=False)
 
-        self._add_summary_sheet(wb, compliance_results)
+        # Index decisions for lookup
+        decision_by_id = {d.requirement_id: d for d in decisions if d.requirement_id}
+        decision_by_text = {d.requirement_text.strip().lower(): d for d in decisions}
 
-        output_path = self._generate_output_path(template_path, output_dir)
+        total_populated = 0
+        all_evaluated_decisions: list[ComplianceDecision] = []
 
-        wb.save(output_path)
-        wb.close()
+        # Iterate through sheets and requirements
+        for sheet_analysis in analysis.sheets:
+            if sheet_analysis.sheet_name not in wb.sheetnames:
+                continue
 
-        logger.info("excel_populated", output_path=output_path)
-        return output_path
+            ws = wb[sheet_analysis.sheet_name]
 
-    def _write_compliance_result(self, wb: openpyxl.Workbook, result: dict):
-        sheet_name = result.get("sheet_name")
-        cell_ref = result.get("cell_reference")
-        status = result.get("status")
-        confidence = result.get("confidence", 0)
+            for req in sheet_analysis.requirements:
+                # Find matching decision
+                dec = decision_by_id.get(req.requirement_id)
+                if not dec:
+                    dec = decision_by_text.get(req.requirement_text.strip().lower())
 
-        if not sheet_name or not cell_ref:
-            return
+                if not dec:
+                    continue
 
-        if sheet_name not in wb.sheetnames:
-            return
+                all_evaluated_decisions.append(dec)
+                status_str = STATUS_LABELS.get(dec.state, dec.state.value)
+                fill = STATUS_FILLS.get(dec.state)
 
-        sheet = wb[sheet_name]
+                # Format evidence text for remarks
+                remarks_parts: list[str] = []
+                if dec.evidence:
+                    for ev in dec.evidence:
+                        citation = f"[{ev.citation}]" if ev.citation else ""
+                        remarks_parts.append(f"{citation} {ev.value} - {ev.reasoning}".strip())
+                elif dec.reasoning:
+                    remarks_parts.append(dec.reasoning)
 
-        try:
-            cell = sheet[cell_ref]
+                remarks_text = " | ".join(remarks_parts)
 
-            if cell.value is not None:
-                original_value = cell.value
-                result["original_value"] = original_value
+                # 1. Populate compliance cells
+                for _, cell_coord in req.compliance_cells.items():
+                    cell = ws[cell_coord]
+                    cell.value = status_str
+                    if fill:
+                        cell.fill = fill
+                    total_populated += 1
 
-            cell.value = result.get("ai_decision", result.get("value", ""))
+                # 2. Populate remarks cells
+                for _, cell_coord in req.remarks_cells.items():
+                    cell = ws[cell_coord]
+                    cell.value = remarks_text
+                    total_populated += 1
 
-            if status:
-                color = self.compliance_colors.get(ComplianceStatus(status), "FFFFFF")
-                cell.fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
+        # Add Compliance Summary Sheet
+        self._create_summary_sheet(wb, analysis, all_evaluated_decisions or decisions)
 
-            if confidence < 0.7:
-                cell.font = Font(color="FF0000")
-            elif confidence < 0.9:
-                cell.font = Font(color="FFC000")
+        # File naming: {original_name}_populated_{timestamp}.xlsx
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        stem = template_file.stem
+        populated_filename = f"{stem}_populated_{timestamp}.xlsx"
+        output_file_path = self.output_dir / populated_filename
 
-        except Exception as e:
-            logger.error("failed_to_write_cell", cell=cell_ref, error=str(e))
+        wb.save(output_file_path)
+        logger.info("Populated workbook saved", path=str(output_file_path), populated_cells=total_populated)
 
-    def _add_summary_sheet(self, wb: openpyxl.Workbook, compliance_results: list[dict]):
-        if "Summary" in wb.sheetnames:
-            del wb["Summary"]
+        # Run automated validation
+        validation_report = self.validator.validate(
+            populated_path=output_file_path,
+            original_analysis=analysis,
+            decisions=all_evaluated_decisions or decisions,
+        )
 
-        summary = wb.create_sheet("Summary", 0)
+        return PopulationResult(
+            output_file_path=str(output_file_path),
+            filename=populated_filename,
+            total_populated_cells=total_populated,
+            summary_sheet_created=True,
+            validation_report=validation_report,
+        )
 
-        summary["A1"] = "Compliance Summary"
-        summary["A1"].font = Font(bold=True, size=14)
+    def _create_summary_sheet(
+        self,
+        wb: openpyxl.Workbook,
+        analysis: WorkbookAnalysis,
+        decisions: list[ComplianceDecision],
+    ) -> None:
+        """Create executive summary sheet as sheet index 0."""
+        summary_title = "Compliance Summary"
+        if summary_title in wb.sheetnames:
+            del wb[summary_title]
 
-        summary["A3"] = "Status"
-        summary["B3"] = "Count"
-        summary["A3"].font = Font(bold=True)
-        summary["B3"].font = Font(bold=True)
+        ws = wb.create_sheet(title=summary_title, index=0)
+        ws.views.sheetView[0].showGridLines = True
 
-        status_counts = {}
-        for result in compliance_results:
-            status = result.get("status", "UNKNOWN")
-            status_counts[status] = status_counts.get(status, 0) + 1
+        # Styles
+        title_font = Font(name="Calibri", size=16, bold=True, color="1F4E79")
+        subtitle_font = Font(name="Calibri", size=10, italic=True, color="595959")
+        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        section_font = Font(name="Calibri", size=12, bold=True, color="1F4E79")
+        bold_font = Font(name="Calibri", size=11, bold=True)
+        regular_font = Font(name="Calibri", size=11)
 
-        row = 4
-        for status, count in status_counts.items():
-            summary[f"A{row}"] = status
-            summary[f"B{row}"] = count
+        header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+        thin_border = Border(
 
-            color = self.compliance_colors.get(ComplianceStatus(status), "FFFFFF")
-            summary[f"A{row}"].fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
+            left=Side(style="thin", color="D9D9D9"),
+            right=Side(style="thin", color="D9D9D9"),
+            top=Side(style="thin", color="D9D9D9"),
+            bottom=Side(style="thin", color="D9D9D9"),
+        )
 
+        # Title block
+        ws["B2"] = "RFP COMPLIANCE EVALUATION REPORT"
+        ws["B2"].font = title_font
+        ws["B3"] = f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Source File: {analysis.filename}"
+        ws["B3"].font = subtitle_font
+
+        # Calculate Statistics
+        total_reqs = len(decisions) if decisions else analysis.total_requirements
+        counts: dict[ComplianceState, int] = {state: 0 for state in ComplianceState}
+        high_conf = 0
+        med_conf = 0
+        low_conf = 0
+
+        for d in decisions:
+            counts[d.state] = counts.get(d.state, 0) + 1
+            if d.confidence >= 0.90:
+                high_conf += 1
+            elif d.confidence >= 0.70:
+                med_conf += 1
+            else:
+                low_conf += 1
+
+        # 1. Executive Status Breakdown Table
+        row = 5
+        ws.cell(row=row, column=2, value="1. Executive Compliance Summary").font = section_font
+        row += 1
+
+        headers = ["Compliance Status", "Count", "Percentage (%)"]
+        for col_idx, h in enumerate(headers, start=2):
+            cell = ws.cell(row=row, column=col_idx, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center" if col_idx > 2 else "left")
+
+        status_order = [
+            (ComplianceState.COMPLIANT, "Compliant", "E2F0D9"),
+            (ComplianceState.PARTIALLY_COMPLIANT, "Partially Compliant", "FFF2CC"),
+            (ComplianceState.NON_COMPLIANT, "Non-Compliant", "FCE4D6"),
+            (ComplianceState.AMBIGUOUS, "Ambiguous (Conflicting)", "FFF2CC"),
+            (ComplianceState.NOT_FOUND, "Not Found in Reference Specs", "F2F2F2"),
+        ]
+
+        for state, label, fill_hex in status_order:
             row += 1
+            cnt = counts.get(state, 0)
+            pct = round((cnt / total_reqs * 100), 1) if total_reqs > 0 else 0.0
 
+            c1 = ws.cell(row=row, column=2, value=label)
+            c1.font = regular_font
+            c1.border = thin_border
+            if fill_hex:
+                c1.fill = PatternFill(start_color=fill_hex, end_color=fill_hex, fill_type="solid")
+
+            c2 = ws.cell(row=row, column=3, value=cnt)
+            c2.font = regular_font
+            c2.alignment = Alignment(horizontal="right")
+            c2.border = thin_border
+
+            c3 = ws.cell(row=row, column=4, value=f"{pct}%")
+            c3.font = regular_font
+            c3.alignment = Alignment(horizontal="right")
+            c3.border = thin_border
+
+        # Total row
         row += 1
-        summary[f"A{row}"] = "Total Requirements"
-        summary[f"B{row}"] = len(compliance_results)
-        summary[f"A{row}"].font = Font(bold=True)
+        c_tot1 = ws.cell(row=row, column=2, value="Total Requirements Evaluated")
+        c_tot1.font = bold_font
+        c_tot1.border = thin_border
 
-        row += 2
-        summary[f"A{row}"] = "Confidence Distribution"
-        summary[f"A{row}"].font = Font(bold=True, size=12)
+        c_tot2 = ws.cell(row=row, column=3, value=total_reqs)
+        c_tot2.font = bold_font
+        c_tot2.alignment = Alignment(horizontal="right")
+        c_tot2.border = thin_border
 
+        c_tot3 = ws.cell(row=row, column=4, value="100.0%")
+        c_tot3.font = bold_font
+        c_tot3.alignment = Alignment(horizontal="right")
+        c_tot3.border = thin_border
+
+        # 2. Confidence Distribution Table
+        row += 3
+        ws.cell(row=row, column=2, value="2. AI Confidence Distribution").font = section_font
         row += 1
-        high = sum(1 for r in compliance_results if r.get("confidence", 0) >= 0.9)
-        medium = sum(1 for r in compliance_results if 0.7 <= r.get("confidence", 0) < 0.9)
-        low = sum(1 for r in compliance_results if r.get("confidence", 0) < 0.7)
 
-        summary[f"A{row}"] = "High Confidence (>=0.90)"
-        summary[f"B{row}"] = high
+        conf_headers = ["Confidence Tier", "Criteria", "Count", "Share (%)"]
+        for col_idx, h in enumerate(conf_headers, start=2):
+            cell = ws.cell(row=row, column=col_idx, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center" if col_idx > 3 else "left")
+
+        conf_data = [
+            ("High Confidence", "Score >= 90% (Exact & Rule match)", high_conf),
+            ("Medium Confidence", "Score 70% - 89% (Semantic match)", med_conf),
+            ("Low Confidence (Flagged)", "Score < 70% (Manual review recommended)", low_conf),
+        ]
+
+        for label, crit, cnt in conf_data:
+            row += 1
+            pct = round((cnt / total_reqs * 100), 1) if total_reqs > 0 else 0.0
+            r_c1 = ws.cell(row=row, column=2, value=label)
+            r_c1.font = regular_font
+            r_c1.border = thin_border
+
+            r_c2 = ws.cell(row=row, column=3, value=crit)
+            r_c2.font = regular_font
+            r_c2.border = thin_border
+
+            r_c3 = ws.cell(row=row, column=4, value=cnt)
+            r_c3.font = regular_font
+            r_c3.alignment = Alignment(horizontal="right")
+            r_c3.border = thin_border
+
+            r_c4 = ws.cell(row=row, column=5, value=f"{pct}%")
+            r_c4.font = regular_font
+            r_c4.alignment = Alignment(horizontal="right")
+            r_c4.border = thin_border
+
+        # 3. Sheet Breakdown
+        row += 3
+        ws.cell(row=row, column=2, value="3. Workbook Sheets Breakdown").font = section_font
         row += 1
-        summary[f"A{row}"] = "Medium Confidence (0.70-0.89)"
-        summary[f"B{row}"] = medium
-        row += 1
-        summary[f"A{row}"] = "Low Confidence (<0.70)"
-        summary[f"B{row}"] = low
 
-        row += 2
-        summary[f"A{row}"] = f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}"
+        sheet_headers = ["Sheet Name", "Total Requirements", "Sections Detected", "Columns"]
+        for col_idx, h in enumerate(sheet_headers, start=2):
+            cell = ws.cell(row=row, column=col_idx, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
 
-        summary.column_dimensions["A"].width = 35
-        summary.column_dimensions["B"].width = 15
+        for sheet in analysis.sheets:
+            row += 1
+            s_c1 = ws.cell(row=row, column=2, value=sheet.sheet_name)
+            s_c1.font = regular_font
+            s_c1.border = thin_border
 
-    def _generate_output_path(self, template_path: str, output_dir: str) -> str:
-        template_name = Path(template_path).stem
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        output_filename = f"{template_name}_populated_{timestamp}.xlsx"
-        return str(Path(output_dir) / output_filename)
+            s_c2 = ws.cell(row=row, column=3, value=len(sheet.requirements))
+            s_c2.font = regular_font
+            s_c2.alignment = Alignment(horizontal="right")
+            s_c2.border = thin_border
+
+            s_c3 = ws.cell(row=row, column=4, value=len(sheet.sections))
+            s_c3.font = regular_font
+            s_c3.alignment = Alignment(horizontal="right")
+            s_c3.border = thin_border
+
+            s_c4 = ws.cell(row=row, column=5, value=len(sheet.columns))
+            s_c4.font = regular_font
+            s_c4.alignment = Alignment(horizontal="right")
+            s_c4.border = thin_border
+
+        # Auto-fit column widths
+        for col in range(2, 7):
+            col_letter = get_column_letter(col)
+            max_len = 0
+            for r in range(1, row + 2):
+                val = ws.cell(row=r, column=col).value
+                if val:
+                    max_len = max(max_len, len(str(val)))
+            ws.column_dimensions[col_letter].width = max(max_len + 3, 14)
