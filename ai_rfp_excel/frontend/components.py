@@ -5,94 +5,283 @@ import streamlit as st
 
 
 def inject_custom_css() -> None:
-    """Inject modern enterprise slate CSS design system tokens into Streamlit."""
+    """Inject modern minimalist TenderFlow CSS design system tokens into Streamlit."""
     st.markdown(
         """
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
         :root {
-            --primary-600: #4f46e5;
-            --primary-700: #4338ca;
-            --slate-50: #f8fafc;
-            --slate-100: #f1f5f9;
-            --slate-200: #e2e8f0;
-            --slate-300: #cbd5e1;
-            --slate-400: #94a3b8;
-            --slate-500: #64748b;
-            --slate-600: #475569;
-            --slate-700: #334155;
-            --slate-800: #1e293b;
-            --slate-900: #0f172a;
-            --success-50: #ecfdf5;
-            --success-600: #059669;
-            --success-700: #047857;
-            --warning-50: #fffbeb;
-            --warning-600: #d97706;
-            --warning-700: #b45309;
-            --danger-50: #fef2f2;
-            --danger-600: #dc2626;
-            --danger-700: #b91c1c;
-            --card-radius: 10px;
-            --card-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.08);
-            --card-shadow-hover: 0 4px 6px -1px rgba(15, 23, 42, 0.1), 0 2px 4px -2px rgba(15, 23, 42, 0.1);
+            /* Base Theme Colors */
+            --theme-bg: #ffffff;
+            --theme-surface: #ffffff;
+            --theme-surface-subtle: #f9fafb;
+            --theme-border: #e5e7eb;
+            --theme-border-subtle: #f3f4f6;
+            --theme-border-strong: #111827;
+
+            /* Typography Colors */
+            --theme-text-primary: #111827;
+            --theme-text-secondary: #4b5563;
+            --theme-text-muted: #9ca3af;
+            --theme-text-subtle: #6b7280;
+
+            /* Action & Button Tokens */
+            --theme-button-bg: #111827;
+            --theme-button-text: #ffffff;
+            --theme-button-hover: #000000;
+            --theme-button-secondary-bg: #f9fafb;
+            --theme-button-secondary-border: #e5e7eb;
+            --theme-button-secondary-text: #111827;
+
+            /* Radius Tokens */
+            --theme-radius-none: 0px;
+            --theme-radius-sm: 4px;
+            --theme-radius-md: 6px;
+            --theme-radius-lg: 8px;
+            --theme-radius-xl: 12px;
+            --theme-radius-pill: 9999px;
+
+            /* Shadows */
+            --theme-shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+            --theme-shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+            --theme-shadow-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+            --theme-shadow-dialog: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+
+            /* Semantic Status Tokens */
+            --status-success-bg: #ecfdf5;
+            --status-success-border: #a7f3d0;
+            --status-success-text: #047857;
+            --status-warning-bg: #fffbeb;
+            --status-warning-border: #fde68a;
+            --status-warning-text: #b45309;
+            --status-danger-bg: #fef2f2;
+            --status-danger-border: #fecaca;
+            --status-danger-text: #b91c1c;
+            --status-neutral-bg: #f3f4f6;
+            --status-neutral-border: #e5e7eb;
+            --status-neutral-text: #4b5563;
         }
 
-        html, body, [class*="css"] {
+        html, body, [class*="css"], .stApp {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--theme-bg);
+            color: var(--theme-text-primary);
         }
+
+        /* Eliminate excessive top whitespace above dashboard */
+        .block-container {
+            padding-top: 1.5rem !important;
+            padding-bottom: 2rem !important;
+            padding-left: 2.5rem !important;
+            padding-right: 2.5rem !important;
+            max-width: 100% !important;
+        }
+        header[data-testid="stHeader"] {
+            background: transparent !important;
+            height: 1.5rem !important;
+        }
+
+        /* Top-Left TenderFlow Brand Mark */
+        .tenderflow-brand-header {
+            position: absolute;
+            top: 24px;
+            left: 32px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 100;
+        }
+        .tenderflow-brand-bar {
+            width: 5px;
+            height: 18px;
+            background-color: var(--theme-button-bg);
+            border-radius: 1px;
+            display: inline-block;
+        }
+        .tenderflow-brand-text {
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            color: var(--theme-text-primary);
+            text-transform: uppercase;
+        }
+
+        /* Minimalist Login Center Container */
+        .tenderflow-login-wrapper {
+            max-width: 420px;
+            margin: 60px auto 40px auto;
+            padding: 0 16px;
+        }
+        .tenderflow-login-title {
+            font-size: 32px;
+            font-weight: 400;
+            letter-spacing: -0.03em;
+            color: var(--theme-text-primary);
+            margin-bottom: 6px;
+            line-height: 1.2;
+        }
+        .tenderflow-login-subtitle {
+            font-size: 14px;
+            color: var(--theme-text-subtle);
+            margin-bottom: 32px;
+            font-weight: 400;
+        }
+        .tenderflow-field-label {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--theme-text-secondary);
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        /* Footer Branding */
+        .tenderflow-footer {
+            text-align: center;
+            margin-top: 48px;
+            padding: 24px 0;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            color: var(--theme-text-muted);
+            text-transform: uppercase;
+        }
+
+        /* Buttons & Form controls theming */
+        div[data-testid="stForm"] {
+            border: none !important;
+            padding: 0 !important;
+            background: transparent !important;
+        }
+        div[data-testid="stFormSubmitButton"] > button {
+            background-color: var(--theme-button-bg) !important;
+            color: var(--theme-button-text) !important;
+            border: 1px solid var(--theme-button-bg) !important;
+            border-radius: var(--theme-radius-sm) !important;
+            font-weight: 700 !important;
+            font-size: 13px !important;
+            letter-spacing: 0.08em !important;
+            text-transform: uppercase !important;
+            padding: 12px 24px !important;
+            height: 44px !important;
+            transition: all 0.15s ease-in-out !important;
+            box-shadow: var(--theme-shadow-subtle) !important;
+        }
+        div[data-testid="stFormSubmitButton"] > button:hover {
+            background-color: var(--theme-button-hover) !important;
+            border-color: var(--theme-button-hover) !important;
+            transform: translateY(-1px);
+        }
+
+        /* Clean Input Fields - password toggle removed */
+        div[data-testid="stTextInput"] div[data-baseweb="input"] {
+            border: 1px solid var(--theme-border) !important;
+            border-radius: var(--theme-radius-sm) !important;
+            background-color: var(--theme-surface) !important;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+        }
+        div[data-testid="stTextInput"] div[data-baseweb="input"]:focus-within {
+            border-color: var(--theme-border-strong) !important;
+            box-shadow: 0 0 0 1px var(--theme-border-strong) !important;
+        }
+        div[data-testid="stTextInput"] input {
+            border: none !important;
+            background-color: transparent !important;
+            color: var(--theme-text-primary) !important;
+            font-size: 14px !important;
+            padding: 10px 14px !important;
+            box-shadow: none !important;
+        }
+        div[data-testid="stTextInput"] input:focus {
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        div[data-testid="stTextInput"] button {
+            display: none !important;
+        }
+        div[data-testid="stTextInput"] label {
+            font-size: 11px !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.08em !important;
+            text-transform: uppercase !important;
+            color: var(--theme-text-secondary) !important;
+            margin-bottom: 6px !important;
+        }
+
+        /* Checkbox Theming */
+        div[data-testid="stCheckbox"] label span {
+            font-size: 13px !important;
+            color: var(--theme-text-secondary) !important;
+        }
+
+        /* sac.steps Active Step Bold Styling */
+        .ant-steps-item-process .ant-steps-item-title,
+        .ant-steps-item-process > .ant-steps-item-container > .ant-steps-item-content > .ant-steps-item-title,
+        div[class*="ant-steps-item-process"] div[class*="ant-steps-item-title"],
+        div[class*="ant-steps-item-process"] span[class*="ant-steps-item-title"] {
+            font-weight: 800 !important;
+            color: var(--theme-text-primary) !important;
+            letter-spacing: -0.01em !important;
+        }
+        .ant-steps-item-process .ant-steps-item-description,
+        div[class*="ant-steps-item-process"] div[class*="ant-steps-item-description"] {
+            font-weight: 600 !important;
+            color: var(--theme-text-secondary) !important;
+        }
+        .ant-steps-item-finish .ant-steps-item-title,
+        div[class*="ant-steps-item-finish"] div[class*="ant-steps-item-title"] {
+            font-weight: 500 !important;
+            color: var(--theme-text-secondary) !important;
+        }
+        .ant-steps-item-wait .ant-steps-item-title,
+        div[class*="ant-steps-item-wait"] div[class*="ant-steps-item-title"] {
+            font-weight: 400 !important;
+            color: var(--theme-text-muted) !important;
+        }
+
 
         /* Enterprise card layout */
         .enterprise-card {
-            background-color: #ffffff;
-            border: 1px solid var(--slate-200);
-            border-radius: var(--card-radius);
+            background-color: var(--theme-surface);
+            border: 1px solid var(--theme-border);
+            border-radius: var(--theme-radius-lg);
             padding: 20px 24px;
-            box-shadow: var(--card-shadow);
+            box-shadow: var(--theme-shadow-card);
             margin-bottom: 20px;
             transition: box-shadow 0.2s ease-in-out, border-color 0.2s ease-in-out;
         }
         .enterprise-card:hover {
-            box-shadow: var(--card-shadow-hover);
-            border-color: var(--slate-300);
-        }
-
-        /* Full-screen Login Card */
-        .login-wrapper {
-            max-width: 960px;
-            margin: 40px auto;
-            background: #ffffff;
-            border: 1px solid var(--slate-200);
-            border-radius: 12px;
-            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
-            overflow: hidden;
+            box-shadow: var(--theme-shadow-hover);
+            border-color: var(--theme-text-muted);
         }
 
         /* Metric stat card */
         .metric-card {
-            background: #ffffff;
-            border: 1px solid var(--slate-200);
-            border-radius: 8px;
+            background: var(--theme-surface);
+            border: 1px solid var(--theme-border);
+            border-radius: var(--theme-radius-md);
             padding: 16px 20px;
-            box-shadow: var(--card-shadow);
+            box-shadow: var(--theme-shadow-card);
         }
         .metric-label {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--slate-500);
+            letter-spacing: 0.06em;
+            color: var(--theme-text-muted);
             margin-bottom: 4px;
         }
         .metric-value {
             font-size: 24px;
             font-weight: 700;
-            color: var(--slate-900);
+            color: var(--theme-text-primary);
             line-height: 1.2;
         }
         .metric-desc {
             font-size: 12px;
-            color: var(--slate-500);
+            color: var(--theme-text-muted);
             margin-top: 4px;
         }
 
@@ -101,31 +290,31 @@ def inject_custom_css() -> None:
             display: inline-flex;
             align-items: center;
             padding: 3px 10px;
-            border-radius: 9999px;
+            border-radius: var(--theme-radius-pill);
             font-size: 11px;
             font-weight: 700;
             letter-spacing: 0.03em;
             text-transform: uppercase;
         }
         .status-pill-compliant {
-            background-color: var(--success-50);
-            color: var(--success-700);
-            border: 1px solid #a7f3d0;
+            background-color: var(--status-success-bg);
+            color: var(--status-success-text);
+            border: 1px solid var(--status-success-border);
         }
         .status-pill-non-compliant {
-            background-color: var(--danger-50);
-            color: var(--danger-700);
-            border: 1px solid #fecaca;
+            background-color: var(--status-danger-bg);
+            color: var(--status-danger-text);
+            border: 1px solid var(--status-danger-border);
         }
         .status-pill-ambiguous {
-            background-color: var(--warning-50);
-            color: var(--warning-700);
-            border: 1px solid #fde68a;
+            background-color: var(--status-warning-bg);
+            color: var(--status-warning-text);
+            border: 1px solid var(--status-warning-border);
         }
         .status-pill-missing {
-            background-color: var(--slate-100);
-            color: var(--slate-600);
-            border: 1px solid var(--slate-200);
+            background-color: var(--status-neutral-bg);
+            color: var(--status-neutral-text);
+            border: 1px solid var(--status-neutral-border);
         }
 
         /* Confidence Badge */
@@ -138,37 +327,37 @@ def inject_custom_css() -> None:
         /* Custom Alert Cards */
         .enterprise-alert {
             padding: 14px 18px;
-            border-radius: 8px;
+            border-radius: var(--theme-radius-md);
             margin-bottom: 16px;
             border-left: 4px solid;
             font-size: 13px;
         }
         .enterprise-alert-error {
-            background-color: var(--danger-50);
-            border-left-color: var(--danger-600);
-            color: var(--slate-900);
+            background-color: var(--status-danger-bg);
+            border-left-color: var(--status-danger-text);
+            color: var(--theme-text-primary);
         }
         .enterprise-alert-warning {
-            background-color: var(--warning-50);
-            border-left-color: var(--warning-600);
-            color: var(--slate-900);
+            background-color: var(--status-warning-bg);
+            border-left-color: var(--status-warning-text);
+            color: var(--theme-text-primary);
         }
         .enterprise-alert-info {
-            background-color: #eff6ff;
-            border-left-color: #3b82f6;
-            color: var(--slate-900);
+            background-color: var(--theme-surface-subtle);
+            border-left-color: var(--theme-button-bg);
+            color: var(--theme-text-primary);
         }
         .enterprise-alert-title {
             font-weight: 700;
-            font-size: 14px;
+            font-size: 13px;
             margin-bottom: 4px;
         }
 
         /* User Profile in Sidebar */
         .sidebar-profile-card {
-            background: var(--slate-50);
-            border: 1px solid var(--slate-200);
-            border-radius: 8px;
+            background: var(--theme-surface-subtle);
+            border: 1px solid var(--theme-border);
+            border-radius: var(--theme-radius-md);
             padding: 12px;
             margin-top: 16px;
             margin-bottom: 12px;
@@ -176,7 +365,7 @@ def inject_custom_css() -> None:
         .sidebar-username {
             font-weight: 600;
             font-size: 13px;
-            color: var(--slate-900);
+            color: var(--theme-text-primary);
         }
         </style>
         """,
@@ -187,28 +376,25 @@ def inject_custom_css() -> None:
 def render_header(title: str, subtitle: str | None = None, tag_text: str | None = None) -> None:
     """Render a clean, high-contrast enterprise header without emojis."""
     tag_html = (
-        f'<span style="background-color:#eef2ff; color:#4f46e5; border:1px solid #c7d2fe; font-size:11px; font-weight:700; padding:2px 8px; border-radius:4px; margin-left:8px; vertical-align:middle; text-transform:uppercase;">{html.escape(tag_text)}</span>'
+        f'<span style="background-color:var(--theme-surface-subtle); color:var(--theme-text-primary); border:1px solid var(--theme-border); font-size:11px; font-weight:700; padding:2px 8px; border-radius:var(--theme-radius-sm); margin-left:8px; vertical-align:middle; text-transform:uppercase;">{html.escape(tag_text)}</span>'
         if tag_text
         else ""
     )
     sub_html = (
-        f'<p style="margin:4px 0 0 0; font-size:14px; color:#64748b; font-weight:400;">{html.escape(subtitle)}</p>'
+        f'<div style="margin:4px 0 0 0; font-size:14px; color:var(--theme-text-secondary); font-weight:400;">{html.escape(subtitle)}</div>'
         if subtitle
         else ""
     )
 
-    st.markdown(
-        f"""
-        <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
-            <h2 style="margin:0; font-size:22px; font-weight:700; color:#0f172a; display:inline-block;">
-                {html.escape(title)}
-            </h2>
-            {tag_html}
-            {sub_html}
-        </div>
-        """,
-        unsafe_allow_html=True,
+    header_html = (
+        f'<div style="margin-top:0; margin-bottom:20px; padding-bottom:14px; border-bottom:1px solid var(--theme-border);">'
+        f'<h2 style="margin:0; font-size:22px; font-weight:700; color:var(--theme-text-primary); display:inline-block;">{html.escape(title)}</h2>'
+        f'{tag_html}'
+        f'{sub_html}'
+        f'</div>'
     )
+
+    st.html(header_html)
 
 
 def render_card(title: str, content_html: str | None = None, subtitle: str | None = None) -> None:
@@ -219,16 +405,16 @@ def render_card(title: str, content_html: str | None = None, subtitle: str | Non
         else ""
     )
     body_html = content_html or ""
-    st.markdown(
-        f"""
-        <div class="enterprise-card">
-            <div style="font-size:16px; font-weight:700; color:#0f172a;">{html.escape(title)}</div>
-            {sub_html}
-            <div>{body_html}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    card_html = (
+        f'<div class="enterprise-card">'
+        f'<div style="font-size:16px; font-weight:700; color:#0f172a;">{html.escape(title)}</div>'
+        f'{sub_html}'
+        f'<div>{body_html}</div>'
+        f'</div>'
     )
+    st.html(card_html)
+
+
 
 
 def render_metric_card(

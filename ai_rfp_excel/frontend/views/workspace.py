@@ -29,25 +29,33 @@ def render_workspace(client: APIClient) -> None:
         except Exception:
             run_data = None
 
-    # Automatic stage synchronization if user hasn't explicitly overridden
+    # Determine highest unlocked stage based on pipeline progress
+    max_accessible_stage = 0
     if run_data:
         status = str(run_data.get("status", "")).lower()
-        if status in ("pending", "processing", "queued") and st.session_state["workspace_stage"] == 0:
-            st.session_state["workspace_stage"] = 1
-        elif status == "review_required" and st.session_state["workspace_stage"] < 2:
-            st.session_state["workspace_stage"] = 2
-        elif status == "completed" and st.session_state["workspace_stage"] == 1:
-            st.session_state["workspace_stage"] = 2
+        if status == "completed":
+            max_accessible_stage = 3
+        elif status == "review_required":
+            max_accessible_stage = 2
+        elif status in ("processing", "pending", "queued", "failed", "cancelled"):
+            max_accessible_stage = 1
 
-    # Workspace Header
+    # Automatic stage synchronization if on an invalid stage
+    if st.session_state["workspace_stage"] > max_accessible_stage:
+        st.session_state["workspace_stage"] = max_accessible_stage
+
+    # Workspace Header with Stage Numbering
+    stage_names = ["Upload & Configure", "Processing Monitor", "Review & Approvals", "Export & Finalize"]
+    current_stage_idx = st.session_state["workspace_stage"]
+    stage_numbering_text = f"Stage {current_stage_idx + 1} of 4 — {stage_names[current_stage_idx]}"
+
     render_header(
-        title="RFP Evaluation Workspace",
-        subtitle="End-to-end evaluation pipeline: configure, process, review compliance, and export populated workbook.",
-        tag_text=f"Stage {st.session_state['workspace_stage'] + 1} of 4",
+        title="TenderFlow Dashboard",
+        subtitle=stage_numbering_text,
     )
 
     # Interactive Step Indicator
-    steps_items = [
+    steps_items: list[sac.StepsItem | dict[str, Any] | str] = [
         sac.StepsItem(title="Upload & Configure", description="Datasheet & Template", icon="cloud-upload"),
         sac.StepsItem(title="Processing Monitor", description="Real-time Pipeline", icon="activity"),
         sac.StepsItem(title="Review & Approvals", description="Compliance Verification", icon="check2-square"),
@@ -57,17 +65,20 @@ def render_workspace(client: APIClient) -> None:
     chosen_step = sac.steps(
         items=steps_items,
         index=st.session_state["workspace_stage"],
-        format_func=None,
         placement="horizontal",
         size="sm",
         return_index=True,
         key="workspace_steps_nav",
     )
 
-    # Handle manual step click
+    # Handle manual step click with strict locking on uncompleted stages
     if chosen_step is not None and isinstance(chosen_step, int) and chosen_step != st.session_state["workspace_stage"]:
-        st.session_state["workspace_stage"] = chosen_step
-        st.rerun()
+        if chosen_step <= max_accessible_stage:
+            st.session_state["workspace_stage"] = chosen_step
+            st.rerun()
+        else:
+            st.toast("This stage is locked until previous pipeline steps complete.")
+            st.rerun()
 
     st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
@@ -84,74 +95,46 @@ def render_workspace(client: APIClient) -> None:
 
 
 def _render_stage_upload(client: APIClient) -> None:
-    """Stage 1: Upload technical documents, configure model, and launch analysis."""
-    col_left, col_right = st.columns([1, 1], gap="large")
+    """Stage 1: Upload technical documents and launch analysis."""
+    default_model = st.session_state.get("default_model", "qwen3:4b")
 
-    with col_left:
+    col_pdf, col_excel = st.columns([1, 1], gap="large")
+
+    with col_pdf:
         with st.container(border=True):
             st.markdown(
-                '<div style="font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 12px;">'
-                "1. Inference & Model Configuration"
+                '<div style="font-size: 15px; font-weight: 700; color: var(--theme-text-primary); margin-bottom: 8px;">'
+                "1. Technical Specification PDF"
                 "</div>",
                 unsafe_allow_html=True,
             )
-
-            models = client.get_models()
-            if not models:
-                models = [
-                    {"model_tag": "qwen3:4b", "display_name": "Qwen 3 4B (Default)", "ram_usage": "2.5GB", "context_length": "262K", "is_available": True},
-                    {"model_tag": "qwen2.5:3b", "display_name": "Qwen 2.5 3B", "ram_usage": "1.9GB", "context_length": "128K", "is_available": True},
-                    {"model_tag": "phi3.5:3.8b", "display_name": "Phi-3.5 Mini 3.8B", "ram_usage": "2.2GB", "context_length": "128K", "is_available": True},
-                    {"model_tag": "gemma3:4b", "display_name": "Gemma 3 4B", "ram_usage": "2.5GB", "context_length": "8K", "is_available": True},
-                    {"model_tag": "llama3.2:3b", "display_name": "Llama 3.2 3B", "ram_usage": "2.0GB", "context_length": "128K", "is_available": True},
-                ]
-
-            model_map: dict[str, dict[str, Any]] = {}
-            for m in models:
-                tag = str(m.get("model_tag") or m.get("tag", ""))
-                name = str(m.get("display_name") or m.get("name", tag))
-                ram = str(m.get("ram_usage") or f"~{m.get('ram_required_gb', 4)}GB")
-                ctx = str(m.get("context_length") or m.get("context_window", "32K"))
-                label = f"{name} ({tag}) — RAM: {ram}, Context: {ctx}"
-                model_map[label] = m
-
-            selected_label = st.selectbox(
-                "Local Inference Model",
-                options=list(model_map.keys()),
-                index=0,
-                help="Select the local Ollama LLM used for complex technical reasoning and spec matching.",
-            )
-            selected_model = model_map[selected_label]
-
-            vendor_name = st.text_input(
-                "Target Vendor or Product Line (Optional)",
-                placeholder="e.g. Dell PowerStore, HPE ProLiant, Cisco UCS",
-            )
-
-    with col_right:
-        with st.container(border=True):
-            st.markdown(
-                '<div style="font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 12px;">'
-                "2. Input Documents"
-                "</div>",
-                unsafe_allow_html=True,
-            )
-
+            st.caption("Upload vendor datasheet, specification manual, or hardware documentation.")
             pdf_file = st.file_uploader(
-                "Technical Specification PDF",
+                "Upload PDF Datasheet",
                 type=["pdf"],
-                help="Upload vendor datasheet, hardware specification manual, or technical whitepaper.",
+                help="Vendor datasheet or product specification manual.",
                 key="workspace_pdf_uploader",
+                label_visibility="collapsed",
             )
 
+    with col_excel:
+        with st.container(border=True):
+            st.markdown(
+                '<div style="font-size: 15px; font-weight: 700; color: var(--theme-text-primary); margin-bottom: 8px;">'
+                "2. Tender RFP Workbook Template"
+                "</div>",
+                unsafe_allow_html=True,
+            )
+            st.caption("Upload customer compliance response spreadsheet to evaluate and populate.")
             excel_file = st.file_uploader(
-                "RFP Excel Workbook Template",
+                "Upload Excel Workbook",
                 type=["xlsx", "xlsm", "xls"],
-                help="Upload customer response workbook to evaluate and populate.",
+                help="Customer tender requirement response workbook.",
                 key="workspace_excel_uploader",
+                label_visibility="collapsed",
             )
 
-    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
 
     if st.button("Start Compliance Analysis", type="primary", use_container_width=True):
         if not pdf_file or not excel_file:
@@ -167,14 +150,13 @@ def _render_stage_upload(client: APIClient) -> None:
                     excel_res = client.upload_excel(excel_bytes, excel_file.name)
                     excel_id = str(excel_res.get("workbook_id") or "")
 
-                    model_tag_val = selected_model.get("model_tag")
-                    chosen_model: str | None = str(model_tag_val) if model_tag_val is not None else None
+                    chosen_model: str = default_model
 
                     run_res = client.create_run(
                         pdf_document_id=pdf_id,
                         workbook_id=excel_id,
                         model_name=chosen_model,
-                        vendor_name=vendor_name or None,
+                        vendor_name=None,
                     )
 
                     new_run_id = str(run_res.get("run_id") or "")

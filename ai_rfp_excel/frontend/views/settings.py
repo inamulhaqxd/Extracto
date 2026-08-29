@@ -4,7 +4,6 @@ import streamlit as st
 
 from ai_rfp_excel.frontend.api_client import APIClient
 from ai_rfp_excel.frontend.components import (
-    render_error_card,
     render_header,
     render_metric_card,
 )
@@ -43,29 +42,26 @@ def render_settings(client: APIClient) -> None:
         }
         model_tags = list(model_map.keys())
 
-        # Determine current default index
-        default_idx = 0
-        for i, tag in enumerate(model_tags):
-            if model_map[tag].get("is_default"):
-                default_idx = i
-                break
+        # Determine current active default model
+        current_default = st.session_state.get("default_model", "qwen3:4b")
+        default_idx = model_tags.index(current_default) if current_default in model_tags else 0
 
         selected_tag = st.selectbox(
             "Default Inference Model",
             options=model_tags,
             format_func=lambda tag: f"{model_map[tag].get('display_name', tag)} ({tag}) — RAM: {model_map[tag].get('ram_usage', '~4GB')}, Context: {model_map[tag].get('context_length', '32K')}",
             index=default_idx,
-            help="This model will be selected by default on the RFP evaluation upload form.",
+            help="This model is automatically used by the Dashboard when initiating tender compliance evaluations.",
         )
 
         col_save, _ = st.columns([1.5, 3])
         with col_save:
             if st.button("Save Default Model Preference", type="primary", use_container_width=True):
-                if client.set_model_preference(selected_tag):
-                    st.toast(f"Saved default model preference as {selected_tag}.")
-                    st.success(f"Default model preference updated to `{selected_tag}`.")
-                else:
-                    render_error_card("Save Failed", "Could not persist model preference to backend.")
+                st.session_state["default_model"] = selected_tag
+                client.set_model_preference(selected_tag)
+                st.toast(f"Default model preference saved as {selected_tag}.")
+                st.success(f"Default model preference updated to `{selected_tag}`.")
+
 
     st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 

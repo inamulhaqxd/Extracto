@@ -8,14 +8,13 @@ from ai_rfp_excel.frontend.api_client import APIClient
 from ai_rfp_excel.frontend.components import (
     inject_custom_css,
     render_error_card,
-    render_health_indicator,
 )
 from ai_rfp_excel.frontend.views.history import render_history
 from ai_rfp_excel.frontend.views.settings import render_settings
 from ai_rfp_excel.frontend.views.workspace import render_workspace
 
 st.set_page_config(
-    page_title="AI RFP Excel Automation System",
+    page_title="TenderFlow",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -36,10 +35,10 @@ if "authenticated" not in st.session_state:
     st.session_state["user_info"] = None
     st.session_state["current_run_id"] = None
     st.session_state["cookie_checked"] = False
-    st.session_state["active_nav"] = "RFP Workspace"
+    st.session_state["active_nav"] = "Dashboard"
 
 if "active_nav" not in st.session_state:
-    st.session_state["active_nav"] = "RFP Workspace"
+    st.session_state["active_nav"] = "Dashboard"
 
 # Cookie Manager for 30-day "Remember Me" persistence
 cookie_manager = stx.CookieManager(key="rfp_auth_cookie_manager")
@@ -73,92 +72,84 @@ if not st.session_state["authenticated"]:
         [data-testid="stSidebar"] { display: none !important; }
         [data-testid="stSidebarNav"] { display: none !important; }
         [data-testid="collapsedControl"] { display: none !important; }
+        .block-container { max-width: 100% !important; padding-top: 1rem !important; }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    _, center_col, _ = st.columns([1, 2.2, 1])
+    # Top-Left TenderFlow Brand Mark
+    st.markdown(
+        """
+        <div style="padding: 12px 24px; display: flex; align-items: center; gap: 8px;">
+            <span style="width: 5px; height: 18px; background-color: var(--theme-button-bg); border-radius: 1px; display: inline-block;"></span>
+            <span style="font-size: 14px; font-weight: 800; letter-spacing: 0.08em; color: var(--theme-text-primary); text-transform: uppercase;">
+                TENDERFLOW
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Centered Minimalist Login Container
+    _, center_col, _ = st.columns([1, 1.2, 1])
 
     with center_col:
         st.markdown(
             """
-            <div style="text-align: center; margin-top: 30px; margin-bottom: 24px;">
-                <div style="font-size: 26px; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;">
-                    AI RFP Automation System
+            <div style="margin-top: 50px; margin-bottom: 28px;">
+                <div style="font-size: 32px; font-weight: 400; letter-spacing: -0.03em; color: var(--theme-text-primary); margin-bottom: 6px; line-height: 1.2;">
+                    Welcome back
                 </div>
-                <div style="font-size: 14px; color: #64748b; margin-top: 6px;">
-                    Enterprise PDF-to-Excel Compliance & Specification Matching
+                <div style="font-size: 14px; color: var(--theme-text-subtle); font-weight: 400;">
+                    Please enter your details to sign in.
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        col_form, col_info = st.columns([1.1, 1])
+        with st.form("tenderflow_login_form", clear_on_submit=False):
+            username = st.text_input("EMAIL ADDRESS", placeholder="email@example.com")
+            password = st.text_input("PASSWORD", type="password", placeholder="••••••••")
 
-        with col_form:
-            with st.container(border=True):
-                st.markdown(
-                    '<div style="font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 12px;">Sign In</div>',
-                    unsafe_allow_html=True,
-                )
+            remember_me = st.checkbox("Remember me", value=True)
 
-                with st.form("login_form", clear_on_submit=False):
-                    username = st.text_input("Username or Email", placeholder="admin")
-                    password = st.text_input("Password", type="password", placeholder="••••••••")
-                    remember_me = st.checkbox("Remember me for 30 days", value=True)
-                    submit = st.form_submit_button("Sign In", type="primary", use_container_width=True)
+            st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+            submit = st.form_submit_button("SIGN IN", type="primary", use_container_width=True)
 
-                    if submit:
-                        if not username or not password:
-                            render_error_card("Validation Error", "Please provide both username/email and password.")
-                        else:
-                            success, res = client.login(username, password)
-                            if success and isinstance(res, dict):
-                                token = res.get("access_token")
-                                user_data = res.get("user")
+            if submit:
+                if not username or not password:
+                    render_error_card("Validation Error", "Please enter your email address and password.")
+                else:
+                    success, res = client.login(username, password)
+                    if success and isinstance(res, dict):
+                        token = res.get("access_token")
+                        user_data = res.get("user")
 
-                                st.session_state["authenticated"] = True
-                                st.session_state["token"] = token
-                                st.session_state["user_info"] = user_data
-                                client.set_token(token)
+                        st.session_state["authenticated"] = True
+                        st.session_state["token"] = token
+                        st.session_state["user_info"] = user_data
+                        client.set_token(token)
 
-                                if remember_me and token:
-                                    expires = datetime.datetime.now() + datetime.timedelta(days=30)
-                                    cookie_manager.set(
-                                        cookie="rfp_auth_token",
-                                        val=token,
-                                        expires_at=expires,
-                                        key="set_auth_token_cookie",
-                                    )
+                        if remember_me and token:
+                            expires = datetime.datetime.now() + datetime.timedelta(days=30)
+                            cookie_manager.set(
+                                cookie="rfp_auth_token",
+                                val=token,
+                                expires_at=expires,
+                                key="set_auth_token_cookie",
+                            )
 
-                                st.toast("Signed in successfully.")
-                                st.rerun()
-                            else:
-                                error_msg = str(res)
-                                render_error_card(
-                                    "Authentication Failed",
-                                    error_msg,
-                                    "Verify your username and password, or contact system administrator.",
-                                )
-
-        with col_info:
-            with st.container(border=True):
-                st.markdown(
-                    """
-                    <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 12px;">
-                        Platform Capabilities
-                    </div>
-                    <ul style="padding-left: 18px; margin: 0; font-size: 13px; color: #334155; line-height: 1.8;">
-                        <li><strong>Automated PDF Extraction:</strong> Multi-engine OCR & technical table parsing.</li>
-                        <li><strong>5-Layer Matching Engine:</strong> Deterministic, fuzzy, rule-based & LLM matching.</li>
-                        <li><strong>Excel Preservation:</strong> Exact cell styles, formulas & workbook structure.</li>
-                        <li><strong>100% Local & Private:</strong> Zero data leakage with local Ollama inference.</li>
-                    </ul>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                        st.toast("Signed in successfully.")
+                        st.rerun()
+                    else:
+                        error_msg = str(res)
+                        render_error_card(
+                            "Authentication Failed",
+                            error_msg,
+                            "Verify your credentials or contact system administrator.",
+                        )
 
     st.stop()
 
@@ -166,87 +157,65 @@ if not st.session_state["authenticated"]:
 # ==========================================
 # AUTHENTICATED: Sidebar Shell & Navigation
 # ==========================================
+with st.sidebar:
+    # Top Minimalist Brand Header
+    st.markdown(
+        """
+        <div style="padding: 6px 0 18px 0; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--theme-border); margin-bottom: 16px;">
+            <span style="width: 5px; height: 18px; background-color: var(--theme-button-bg); border-radius: 1px; display: inline-block;"></span>
+            <span style="font-size: 15px; font-weight: 800; letter-spacing: 0.08em; color: var(--theme-text-primary); text-transform: uppercase;">
+                TENDERFLOW
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-# Health Indicator in Sidebar
-health = client.check_health()
-render_health_indicator(health)
+    # Navigation Menu via sac.menu inside Sidebar
+    nav_items = [
+        sac.MenuItem("Dashboard", icon="grid"),
+        sac.MenuItem("History", icon="clock-history"),
+        sac.MenuItem("Settings", icon="gear"),
+    ]
 
-st.sidebar.markdown(
-    """
-    <div style="padding: 4px 0 16px 0; border-bottom: 1px solid #e2e8f0; margin-bottom: 16px;">
-        <div style="font-size: 16px; font-weight: 800; color: #0f172a;">RFP Automation</div>
-        <div style="font-size: 12px; color: #64748b;">Enterprise Technical Compliance</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+    # Find current index
+    nav_names = ["Dashboard", "History", "Settings"]
+    current_nav = st.session_state.get("active_nav", "Dashboard")
+    if current_nav == "RFP Workspace":
+        current_nav = "Dashboard"
+    nav_index = nav_names.index(current_nav) if current_nav in nav_names else 0
 
-# Navigation Menu via sac.menu
-nav_items = [
-    sac.MenuItem("RFP Workspace", icon="kanban"),
-    sac.MenuItem("History", icon="clock-history"),
-    sac.MenuItem("Settings", icon="gear"),
-]
+    selected_nav = sac.menu(
+        items=nav_items,
+        index=nav_index,
+        format_func=None,
+        size="sm",
+        key="sidebar_navigation_menu",
+    )
 
-# Find current index
-nav_names = ["RFP Workspace", "History", "Settings"]
-current_nav = st.session_state.get("active_nav", "RFP Workspace")
-nav_index = nav_names.index(current_nav) if current_nav in nav_names else 0
+    if selected_nav and selected_nav != st.session_state.get("active_nav"):
+        st.session_state["active_nav"] = selected_nav
+        st.rerun()
 
-selected_nav = sac.menu(
-    items=nav_items,
-    index=nav_index,
-    format_func=None,
-    size="sm",
-    key="sidebar_navigation_menu",
-)
+    # Spacer pushing Sign Out to the bottom
+    st.markdown("<div style='height: 380px;'></div>", unsafe_allow_html=True)
 
-if selected_nav and selected_nav != st.session_state.get("active_nav"):
-    st.session_state["active_nav"] = selected_nav
-    st.rerun()
-
-st.sidebar.markdown("<div style='margin-top: auto; padding-top: 40px;'></div>", unsafe_allow_html=True)
-
-# User Profile Badge & Sign Out in Sidebar Footer
-user_info = st.session_state.get("user_info") or {}
-uname = user_info.get("username", "Evaluator")
-is_admin = bool(user_info.get("is_admin", False))
-role_label = "ADMINISTRATOR" if is_admin else "EVALUATOR"
-role_color = "blue" if is_admin else "geekblue"
-
-st.sidebar.markdown(
-    f"""
-    <div class="sidebar-profile-card">
-        <div class="sidebar-username">{uname}</div>
-        <div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">{user_info.get('email', '')}</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-sac.tags(
-    items=[sac.Tag(label=role_label, color=role_color)],
-    align="start",
-    size="sm",
-    key="sidebar_user_role_tag",
-)
-
-if st.sidebar.button("Sign Out", use_container_width=True, type="secondary"):
-    cookie_manager.delete(cookie="rfp_auth_token", key="logout_delete_cookie")
-    st.session_state["authenticated"] = False
-    st.session_state["token"] = None
-    st.session_state["user_info"] = None
-    st.session_state["active_nav"] = "RFP Workspace"
-    client.set_token(None)
-    st.rerun()
+    if st.button("Sign Out", use_container_width=True, type="secondary", key="btn_sign_out"):
+        cookie_manager.delete(cookie="rfp_auth_token", key="logout_delete_cookie")
+        st.session_state["authenticated"] = False
+        st.session_state["token"] = None
+        st.session_state["user_info"] = None
+        st.session_state["active_nav"] = "Dashboard"
+        client.set_token(None)
+        st.rerun()
 
 
 # ==========================================
 # AUTHENTICATED: Main View Router
 # ==========================================
-active_tab = st.session_state.get("active_nav", "RFP Workspace")
+active_tab = st.session_state.get("active_nav", "Dashboard")
 
-if active_tab == "RFP Workspace":
+if active_tab in ("Dashboard", "RFP Workspace"):
     render_workspace(client)
 elif active_tab == "History":
     render_history(client)
@@ -254,3 +223,4 @@ elif active_tab == "Settings":
     render_settings(client)
 else:
     render_workspace(client)
+
