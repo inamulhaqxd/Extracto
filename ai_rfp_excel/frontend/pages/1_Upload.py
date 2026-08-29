@@ -24,17 +24,22 @@ models = client.get_models()
 if not models:
     # Default fallback models
     models = [
-        {"model_tag": "qwen3:4b", "display_name": "Qwen 3 4B (Default)", "ram_required_gb": 4.5, "context_window": 32768, "is_available": True},
-        {"model_tag": "qwen2.5:3b", "display_name": "Qwen 2.5 3B", "ram_required_gb": 3.5, "context_window": 32768, "is_available": True},
-        {"model_tag": "phi3.5:3.8b", "display_name": "Phi-3.5 Mini 3.8B", "ram_required_gb": 4.0, "context_window": 128000, "is_available": True},
-        {"model_tag": "gemma3:4b", "display_name": "Gemma 3 4B", "ram_required_gb": 4.5, "context_window": 8192, "is_available": True},
-        {"model_tag": "llama3.2:3b", "display_name": "Llama 3.2 3B", "ram_required_gb": 3.5, "context_window": 8192, "is_available": True},
+        {"model_tag": "qwen3:4b", "tag": "qwen3:4b", "display_name": "Qwen 3 4B (Default)", "ram_usage": "2.5GB", "context_length": "262K", "is_available": True},
+        {"model_tag": "qwen2.5:3b", "tag": "qwen2.5:3b", "display_name": "Qwen 2.5 3B", "ram_usage": "1.9GB", "context_length": "128K", "is_available": True},
+        {"model_tag": "phi3.5:3.8b", "tag": "phi3.5:3.8b", "display_name": "Phi-3.5 Mini 3.8B", "ram_usage": "2.2GB", "context_length": "128K", "is_available": True},
+        {"model_tag": "gemma3:4b", "tag": "gemma3:4b", "display_name": "Gemma 3 4B", "ram_usage": "2.5GB", "context_length": "8K", "is_available": True},
+        {"model_tag": "llama3.2:3b", "tag": "llama3.2:3b", "display_name": "Llama 3.2 3B", "ram_usage": "2.0GB", "context_length": "128K", "is_available": True},
     ]
 
-model_options = {
-    f"{m['display_name']} ({m['model_tag']}) - RAM: ~{m.get('ram_required_gb', 4)}GB, Context: {m.get('context_window', 32768)}": m
-    for m in models
-}
+model_options = {}
+for m in models:
+    if isinstance(m, dict):
+        tag = m.get("model_tag") or m.get("tag", "")
+        name = m.get("display_name") or m.get("name", tag)
+        ram = m.get("ram_usage") or f"~{m.get('ram_required_gb', 4)}GB"
+        ctx = m.get("context_length") or str(m.get("context_window", "32K"))
+        label = f"{name} ({tag}) - RAM: {ram}, Context: {ctx}"
+        model_options[label] = m
 
 selected_label = st.selectbox(
     "Choose inference model for complex requirement evaluation:",
@@ -78,22 +83,25 @@ if st.button("🚀 Start Compliance Evaluation Run", type="primary", use_contain
                 # 1. Upload PDF
                 pdf_bytes = pdf_file.getvalue()
                 pdf_res = client.upload_pdf(pdf_bytes, pdf_file.name)
-                pdf_id = pdf_res.get("document_id")
+                pdf_id = str(pdf_res.get("document_id") or "")
 
                 # 2. Upload Excel
                 excel_bytes = excel_file.getvalue()
                 excel_res = client.upload_excel(excel_bytes, excel_file.name)
-                excel_id = excel_res.get("workbook_id")
+                excel_id = str(excel_res.get("workbook_id") or "")
 
                 # 3. Create Run
+                model_tag_val = selected_model_data.get("model_tag")
+                chosen_model: str | None = str(model_tag_val) if model_tag_val is not None else None
+
                 run_res = client.create_run(
                     pdf_document_id=pdf_id,
                     workbook_id=excel_id,
-                    model_name=selected_model_data.get("model_tag"),
+                    model_name=chosen_model,
                     vendor_name=vendor_name or None,
                 )
 
-                run_id = run_res.get("run_id")
+                run_id = str(run_res.get("run_id") or "")
                 st.session_state["current_run_id"] = run_id
                 st.session_state["active_pdf_filename"] = pdf_file.name
                 st.session_state["active_excel_filename"] = excel_file.name

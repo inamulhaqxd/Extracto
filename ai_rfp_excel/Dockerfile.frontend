@@ -11,6 +11,8 @@ RUN pip install --no-cache-dir --default-timeout=300 --retries=5 -r requirements
 
 COPY ai_rfp_excel/frontend/ ./frontend/
 COPY ai_rfp_excel/ ./ai_rfp_excel/
+ENV PYTHONPATH="/app"
+
 
 EXPOSE 8501
 

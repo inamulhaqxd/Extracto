@@ -82,15 +82,18 @@ for r in runs:
 
         with c2:
             if gen_file:
-                download_url = client.get_download_url(gen_file)
-                st.markdown(
-                    f'<a href="{download_url}" target="_blank" style="text-decoration:none;">'
-                    f'<button style="background-color:#17a2b8; color:white; padding:8px 16px; border:none; border-radius:4px; font-weight:600; width:100%; cursor:pointer;">'
-                    f'📥 Download Excel'
-                    f'</button>'
-                    f'</a>',
-                    unsafe_allow_html=True,
-                )
+                file_bytes = client.download_file(gen_file)
+                if file_bytes:
+                    st.download_button(
+                        label="📥 Download Excel",
+                        data=file_bytes,
+                        file_name=gen_file,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"dl_{r_id}",
+                        use_container_width=True,
+                    )
+                else:
+                    st.caption("File unavailable")
 
         with c3:
             if st.button("🔄 Re-run Evaluation (Reuse Specs)", key=f"rerun_{r_id}"):

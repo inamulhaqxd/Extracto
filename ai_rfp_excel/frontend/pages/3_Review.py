@@ -57,21 +57,24 @@ m6.metric("Needs Review", run_data.get("low_confidence_count", 0))
 st.markdown("---")
 
 # 2. Download Final Excel Section
-col_d1, col_d2 = st.columns([3, 1])
+col_d1, col_d2 = st.columns([3, 2])
 with col_d1:
     st.subheader("📑 Final Output Spreadsheet")
     st.caption("Workbook formatted with original fonts, styles, merged cells, formulas, and Compliance Summary tab.")
 with col_d2:
     if generated_file:
-        download_url = client.get_download_url(generated_file)
-        st.markdown(
-            f'<a href="{download_url}" target="_blank" style="text-decoration:none;">'
-            f'<button style="background-color:#28a745; color:white; padding:10px 20px; border:none; border-radius:6px; font-weight:700; width:100%; cursor:pointer;">'
-            f'📥 Download Populated Excel'
-            f'</button>'
-            f'</a>',
-            unsafe_allow_html=True,
-        )
+        file_bytes = client.download_file(generated_file)
+        if file_bytes:
+            st.download_button(
+                label="📥 Download Populated Excel",
+                data=file_bytes,
+                file_name=generated_file,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True,
+            )
+        else:
+            st.warning("⚠️ File is generating or temporarily unavailable for direct download.")
 
 st.markdown("---")
 

@@ -1,5 +1,5 @@
 import os
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -27,7 +27,7 @@ class APIClient:
             with httpx.Client(timeout=3.0) as client:
                 res = client.get(f"{self.base_url}/health")
                 if res.status_code == 200:
-                    return res.json()
+                    return cast(dict[str, Any], res.json())
                 return {"status": "degraded", "backend": "unhealthy"}
         except Exception:
             return {"status": "unreachable", "backend": "down"}
@@ -37,14 +37,18 @@ class APIClient:
             with httpx.Client(timeout=5.0) as client:
                 res = client.post(
                     f"{self.base_url}/auth/login",
-                    json={"username": username, "password": password},
+                    json={"email": username, "username": username, "password": password},
                 )
                 if res.status_code == 200:
-                    data = res.json()
+                    data = cast(dict[str, Any], res.json())
                     token = data.get("access_token")
-                    self.set_token(token)
+                    if isinstance(token, str):
+                        self.set_token(token)
                     return True, data
-                return False, res.json().get("detail", "Login failed")
+                detail = res.json().get("detail", "Login failed")
+                if isinstance(detail, list):
+                    detail = detail[0].get("msg", "Validation error") if detail else "Validation error"
+                return False, str(detail)
         except Exception as e:
             return False, f"Connection error: {e!s}"
 
@@ -53,7 +57,29 @@ class APIClient:
             with httpx.Client(timeout=5.0) as client:
                 res = client.get(f"{self.base_url}/ai/models", headers=self._get_headers())
                 if res.status_code == 200:
-                    return res.json()
+                    data = res.json()
+                    raw_models = (
+                        data.get("models", [])
+                        if isinstance(data, dict)
+                        else (data if isinstance(data, list) else [])
+                    )
+                    normalized: list[dict[str, Any]] = []
+                    for m in raw_models:
+                        if isinstance(m, dict):
+                            tag = m.get("tag") or m.get("model_tag") or m.get("name", "")
+                            name = m.get("name") or m.get("display_name") or m.get("label", "")
+                            normalized.append({
+                                "model_tag": tag,
+                                "tag": tag,
+                                "name": name,
+                                "display_name": name,
+                                "label": m.get("label") or f"{name} ({tag})",
+                                "ram_usage": m.get("ram_usage") or f"~{m.get('ram_required_gb', 4)}GB",
+                                "context_length": m.get("context_length") or str(m.get("context_window", "32K")),
+                                "is_default": bool(m.get("is_default", False)),
+                                "is_available": bool(m.get("is_available", True)),
+                            })
+                    return normalized
                 return []
         except Exception:
             return []
@@ -75,7 +101,7 @@ class APIClient:
             files = {"file": (filename, file_bytes, "application/pdf")}
             res = client.post(f"{self.base_url}/pdf/upload", files=files, headers=self._get_headers())
             if res.status_code in (200, 201):
-                return res.json()
+                return cast(dict[str, Any], res.json())
             raise RuntimeError(res.json().get("detail", "PDF upload failed"))
 
     def upload_excel(self, file_bytes: bytes, filename: str) -> dict[str, Any]:
@@ -83,7 +109,7 @@ class APIClient:
             files = {"file": (filename, file_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
             res = client.post(f"{self.base_url}/excel/upload", files=files, headers=self._get_headers())
             if res.status_code in (200, 201):
-                return res.json()
+                return cast(dict[str, Any], res.json())
             raise RuntimeError(res.json().get("detail", "Excel upload failed"))
 
     def create_run(
@@ -102,14 +128,14 @@ class APIClient:
             }
             res = client.post(f"{self.base_url}/runs", json=payload, headers=self._get_headers())
             if res.status_code in (200, 201):
-                return res.json()
+                return cast(dict[str, Any], res.json())
             raise RuntimeError(res.json().get("detail", "Failed to start run"))
 
     def get_run(self, run_id: str) -> dict[str, Any]:
         with httpx.Client(timeout=10.0) as client:
             res = client.get(f"{self.base_url}/runs/{run_id}", headers=self._get_headers())
             if res.status_code == 200:
-                return res.json()
+                return cast(dict[str, Any], res.json())
             raise RuntimeError(res.json().get("detail", "Failed to fetch run status"))
 
     def cancel_run(self, run_id: str) -> bool:
@@ -128,7 +154,7 @@ class APIClient:
                 headers=self._get_headers(),
             )
             if res.status_code == 200:
-                return res.json()
+                return cast(dict[str, Any], res.json())
             raise RuntimeError(res.json().get("detail", "Failed to save reviews"))
 
     def list_runs(self, status_filter: str | None = None) -> list[dict[str, Any]]:
@@ -139,10 +165,20 @@ class APIClient:
             with httpx.Client(timeout=10.0) as client:
                 res = client.get(f"{self.base_url}/runs", params=params, headers=self._get_headers())
                 if res.status_code == 200:
-                    return res.json()
+                    return cast(list[dict[str, Any]], res.json())
                 return []
         except Exception:
             return []
 
     def get_download_url(self, filename: str) -> str:
         return f"{self.base_url}/excel/download/{filename}"
+
+    def download_file(self, filename: str) -> bytes | None:
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                res = client.get(f"{self.base_url}/excel/download/{filename}", headers=self._get_headers())
+                if res.status_code == 200:
+                    return res.content
+                return None
+        except Exception:
+            return None

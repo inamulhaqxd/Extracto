@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from ai_rfp_excel.app.config import settings
 
@@ -12,8 +13,7 @@ class Base(DeclarativeBase):
 
 engine = create_async_engine(
     settings.DATABASE_URL,
-    pool_size=5,
-    max_overflow=10,
+    poolclass=NullPool,
     echo=settings.DEBUG,
 )
 

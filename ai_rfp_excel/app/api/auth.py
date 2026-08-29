@@ -22,7 +22,8 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str | None = None
+    username: str | None = None
     password: str
 
 
@@ -87,7 +88,14 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
 
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
-    result = await db.execute(select(User).where(User.email == request.email))
+    identifier = request.email or request.username
+    if not identifier:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Email or username is required",
+        )
+
+    result = await db.execute(select(User).where((User.email == identifier) | (User.username == identifier)))
     user: User | None = result.scalar_one_or_none()
 
     if user is None or not verify_password(request.password, user.hashed_password):
