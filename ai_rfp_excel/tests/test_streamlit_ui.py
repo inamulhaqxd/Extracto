@@ -115,3 +115,8 @@ def test_api_client_get_me_unauthorized() -> None:
 def test_api_client_get_me_no_token() -> None:
     client = APIClient(base_url="http://localhost:8000", token=None)
     assert client.get_me() is None
+
+
+def test_workspace_view_module_importable() -> None:
+    from ai_rfp_excel.frontend.views.workspace import render_workspace
+    assert callable(render_workspace)
