@@ -50,6 +50,7 @@ class ReviewItem(BaseModel):
     model_config = {"protected_namespaces": ()}
     requirement_id: str
     status: str
+    matched_value: str | None = None
     confidence: float | None = None
     review_notes: str | None = None
     override_reason: str | None = None
@@ -68,6 +69,7 @@ class RunDecisionResponse(BaseModel):
     status: str
     confidence: float
     reasoning: str | None = None
+    matched_value: str | None = None
     resolving_layer: str | None = None
     evidence: list[dict[str, Any]] = Field(default_factory=list)
     needs_review: bool = False
@@ -115,7 +117,7 @@ async def execute_pipeline_background(
         run.status = "processing"
         run.started_at = datetime.now()
         run.progress = 10.0
-        run.current_step = "Analyzing Excel template and extracting requirements"
+        run.current_step = "Analyzing Excel template and mapping empty slots"
         await db.commit()
 
         # Step 2: Load and analyze Excel workbook
@@ -135,10 +137,10 @@ async def execute_pipeline_background(
         )
 
         run.progress = 30.0
-        run.current_step = "Retrieving extracted PDF technical specifications"
+        run.current_step = "Extracting technical specifications from reference PDF"
         await db.commit()
 
-        # Step 3: Fetch facts / pages from PDF document
+        # Step 3: Fetch facts / pages from PDF document, or extract if not yet ingested
         facts: list[FactItem] = []
         facts_res = await db.execute(select(ExtractedFact).where(ExtractedFact.document_id == pdf_doc_id))
         db_facts = facts_res.scalars().all()
@@ -160,7 +162,7 @@ async def execute_pipeline_background(
             )
 
         if not facts:
-            # Fallback to document pages text
+            # Fallback to document pages text or extract directly from PDF file
             pages_res = await db.execute(select(DocumentPage).where(DocumentPage.document_id == pdf_doc_id))
             db_pages = pages_res.scalars().all()
             for p in db_pages:
@@ -176,6 +178,68 @@ async def execute_pipeline_background(
                             confidence=0.90,
                         )
                     )
+
+        if not facts:
+            # Automatically extract text and specs directly from the uploaded PDF file
+            doc_res = await db.execute(select(Document).where(Document.id == pdf_doc_id))
+            doc_rec = doc_res.scalar_one_or_none()
+            if doc_rec:
+                pdf_path = Path(settings.UPLOAD_DIR) / doc_rec.filename
+                if not pdf_path.exists():
+                    pdf_path = Path(settings.UPLOAD_DIR) / f"{pdf_doc_id}.pdf"
+
+                if pdf_path.exists():
+                    import fitz
+                    fitz_doc = fitz.open(str(pdf_path))
+                    for p_num in range(len(fitz_doc)):
+                        page = fitz_doc[p_num]
+                        page_text = page.get_text()
+                        page_index = p_num + 1
+                        if page_text and page_text.strip():
+                            doc_page = DocumentPage(
+                                document_id=pdf_doc_id,
+                                page_number=page_index,
+                                content_type="text",
+                                native_text=page_text,
+                                is_scanned=False,
+                            )
+                            db.add(doc_page)
+
+                            # Extract bullet points / line specs
+                            lines = [ln.strip() for ln in page_text.split("\n") if len(ln.strip()) >= 3]
+                            for line in lines:
+                                if ":" in line:
+                                    parts = line.split(":", 1)
+                                    f_name = parts[0].strip()
+                                    f_val = parts[1].strip()
+                                else:
+                                    f_name = "Technical Specification"
+                                    f_val = line
+
+                                fact_item = FactItem(
+                                    field_name=f_name,
+                                    value=f_val,
+                                    source_document_id=str(pdf_doc_id),
+                                    source_page=page_index,
+                                    source_type="text",
+                                    confidence=0.95,
+                                    extraction_method="pdf_ingestion",
+                                )
+                                facts.append(fact_item)
+
+                                ef = ExtractedFact(
+                                    document_id=pdf_doc_id,
+                                    source_page=page_index,
+                                    field_name=f_name,
+                                    original_value=f_val,
+                                    normalized_value=f_val,
+                                    confidence=0.95,
+                                    extraction_method="pdf_ingestion",
+                                    source_type="text",
+                                )
+                                db.add(ef)
+                    fitz_doc.close()
+                    await db.commit()
 
         run.progress = 50.0
         run.current_step = f"Evaluating {analysis.total_requirements} requirements with Compliance Engine"
@@ -372,6 +436,7 @@ async def get_run_status(
                 status=state_val,
                 confidence=conf,
                 reasoning=d.get("reasoning"),
+                matched_value=d.get("matched_value"),
                 resolving_layer=d.get("resolving_layer"),
                 evidence=d.get("evidence", []),
                 needs_review=conf < 0.70 or "AMBIGUOUS" in state_val,
@@ -461,6 +526,8 @@ async def submit_run_review(
                 if state.value.lower() == rev.status.lower() or state.name.lower() == rev.status.lower():
                     dec.state = state
                     break
+            if rev.matched_value is not None:
+                dec.matched_value = rev.matched_value
             if rev.confidence is not None:
                 dec.confidence = rev.confidence
             if rev.review_notes:

@@ -157,6 +157,9 @@ if not st.session_state["authenticated"]:
 # ==========================================
 # AUTHENTICATED: Sidebar Shell & Navigation
 # ==========================================
+if "default_model" not in st.session_state or not st.session_state["default_model"]:
+    st.session_state["default_model"] = client.get_model_preference()
+
 with st.sidebar:
     # Top Minimalist Brand Header
     st.markdown(

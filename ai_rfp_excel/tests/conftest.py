@@ -1,8 +1,9 @@
 from pathlib import Path
+
 import fitz  # PyMuPDF
 import openpyxl
-from openpyxl.styles import Border, Font, PatternFill, Side
 import pytest
+from openpyxl.styles import Font, PatternFill
 
 from ai_rfp_excel.app.ai.mock_provider import MockLLMProvider
 from ai_rfp_excel.app.matching.models import FactItem

@@ -1,5 +1,6 @@
 import json
 from unittest.mock import AsyncMock, patch
+
 import httpx
 import pytest
 
@@ -15,8 +16,6 @@ from ai_rfp_excel.app.ai.models import (
     ChatMessage,
     ComplianceAnalysisResult,
     ComplianceStatus,
-    EvidenceResult,
-    ExtractedSpecItem,
     Role,
     SpecExtractionResult,
 )

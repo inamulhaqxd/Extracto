@@ -1,3 +1,5 @@
+from collections.abc import AsyncGenerator
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -5,14 +7,14 @@ from ai_rfp_excel.app.main import app
 
 
 @pytest.fixture
-async def client():
+async def client() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
 
 @pytest.mark.asyncio
-async def test_register_first_user_becomes_admin(client):
+async def test_register_first_user_becomes_admin(client: AsyncClient) -> None:
     response = await client.post(
         "/auth/register",
         json={
@@ -28,7 +30,7 @@ async def test_register_first_user_becomes_admin(client):
 
 
 @pytest.mark.asyncio
-async def test_register_second_user_is_not_admin(client):
+async def test_register_second_user_is_not_admin(client: AsyncClient) -> None:
     await client.post(
         "/auth/register",
         json={"username": "admin", "email": "admin@test.com", "password": "admin123"},
@@ -43,7 +45,7 @@ async def test_register_second_user_is_not_admin(client):
 
 
 @pytest.mark.asyncio
-async def test_register_duplicate_email_fails(client):
+async def test_register_duplicate_email_fails(client: AsyncClient) -> None:
     await client.post(
         "/auth/register",
         json={"username": "admin", "email": "admin@test.com", "password": "admin123"},
@@ -56,7 +58,7 @@ async def test_register_duplicate_email_fails(client):
 
 
 @pytest.mark.asyncio
-async def test_login_success(client):
+async def test_login_success(client: AsyncClient) -> None:
     await client.post(
         "/auth/register",
         json={"username": "admin", "email": "admin@test.com", "password": "admin123"},
@@ -70,7 +72,7 @@ async def test_login_success(client):
 
 
 @pytest.mark.asyncio
-async def test_login_wrong_password_fails(client):
+async def test_login_wrong_password_fails(client: AsyncClient) -> None:
     await client.post(
         "/auth/register",
         json={"username": "admin", "email": "admin@test.com", "password": "admin123"},
@@ -83,7 +85,7 @@ async def test_login_wrong_password_fails(client):
 
 
 @pytest.mark.asyncio
-async def test_login_nonexistent_user_fails(client):
+async def test_login_nonexistent_user_fails(client: AsyncClient) -> None:
     response = await client.post(
         "/auth/login",
         json={"email": "nobody@test.com", "password": "pass123"},
@@ -92,7 +94,7 @@ async def test_login_nonexistent_user_fails(client):
 
 
 @pytest.mark.asyncio
-async def test_get_me(client):
+async def test_get_me(client: AsyncClient) -> None:
     reg = await client.post(
         "/auth/register",
         json={"username": "admin", "email": "admin@test.com", "password": "admin123"},
@@ -107,13 +109,13 @@ async def test_get_me(client):
 
 
 @pytest.mark.asyncio
-async def test_get_me_no_token(client):
+async def test_get_me_no_token(client: AsyncClient) -> None:
     response = await client.get("/auth/me")
     assert response.status_code == 403
 
 
 @pytest.mark.asyncio
-async def test_logout(client):
+async def test_logout(client: AsyncClient) -> None:
     reg = await client.post(
         "/auth/register",
         json={"username": "admin", "email": "admin@test.com", "password": "admin123"},
@@ -127,7 +129,7 @@ async def test_logout(client):
 
 
 @pytest.mark.asyncio
-async def test_reset_password_by_admin(client):
+async def test_reset_password_by_admin(client: AsyncClient) -> None:
     reg = await client.post(
         "/auth/register",
         json={"username": "admin", "email": "admin@test.com", "password": "admin123"},
@@ -150,7 +152,7 @@ async def test_reset_password_by_admin(client):
 
 
 @pytest.mark.asyncio
-async def test_reset_password_non_admin_fails(client):
+async def test_reset_password_non_admin_fails(client: AsyncClient) -> None:
     await client.post(
         "/auth/register",
         json={"username": "admin", "email": "admin@test.com", "password": "admin123"},
@@ -160,7 +162,7 @@ async def test_reset_password_non_admin_fails(client):
         json={"username": "user1", "email": "user1@test.com", "password": "user123"},
     )
     user_token = user_reg.json()["access_token"]
-    admin_reg = await client.get(
+    await client.get(
         "/auth/me",
         headers={"Authorization": f"Bearer {user_token}"},
     )

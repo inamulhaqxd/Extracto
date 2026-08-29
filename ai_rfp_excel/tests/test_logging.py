@@ -1,7 +1,7 @@
 import logging
+
 import pytest
 import structlog
-
 
 from ai_rfp_excel.app.logging import setup_logging
 

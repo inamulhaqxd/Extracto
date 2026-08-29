@@ -102,7 +102,22 @@ class ExcelWriter:
                         cell.fill = fill
                     total_populated += 1
 
-                # 2. Populate remarks cells
+                # 2. Populate offered specification / proposed value cells
+                matched_val = dec.matched_value or (dec.evidence[0].value if dec.evidence else "")
+                if matched_val:
+                    for _, cell_coord in req.offered_spec_cells.items():
+                        cell = ws[cell_coord]
+                        cell.value = matched_val
+                        total_populated += 1
+
+                    for _, cell_coord in req.vendor_cells.items():
+                        # Only fill vendor cell if not already populated by compliance or offered spec
+                        if cell_coord not in req.compliance_cells.values() and cell_coord not in req.offered_spec_cells.values():
+                            cell = ws[cell_coord]
+                            cell.value = matched_val
+                            total_populated += 1
+
+                # 3. Populate remarks cells
                 for _, cell_coord in req.remarks_cells.items():
                     cell = ws[cell_coord]
                     cell.value = remarks_text

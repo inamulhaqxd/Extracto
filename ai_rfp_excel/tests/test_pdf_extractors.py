@@ -1,14 +1,15 @@
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from ai_rfp_excel.app.ingestion.models import OCRResult
-from ai_rfp_excel.app.ingestion.ocr.processor import needs_ocr, ocr_page, ocr_with_paddleocr, ocr_with_tesseract
+from ai_rfp_excel.app.ingestion.ocr.processor import needs_ocr, ocr_page, ocr_with_tesseract
 from ai_rfp_excel.app.ingestion.pdf.image_extractor import has_images
 from ai_rfp_excel.app.ingestion.pdf.table_extractor import _detect_merged_cells, has_tables
 from ai_rfp_excel.app.ingestion.pdf.text_extractor import extract_text_from_page, has_text_content
 
 
 def test_detect_merged_cells_horizontal() -> None:
-    raw_table = [
+    raw_table: list[list[Any]] = [
         ["Header 1", "Header 2", "Header 3"],
         ["Merged Cell Text", None, None],
         ["A", "B", "C"],
@@ -22,7 +23,7 @@ def test_detect_merged_cells_horizontal() -> None:
 
 
 def test_detect_merged_cells_vertical() -> None:
-    raw_table = [
+    raw_table: list[list[Any]] = [
         ["Category", "Item", "Price"],
         ["Hardware", "Server", "$1000"],
         [None, "Switch", "$500"],

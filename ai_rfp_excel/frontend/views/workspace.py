@@ -33,11 +33,11 @@ def render_workspace(client: APIClient) -> None:
     max_accessible_stage = 0
     if run_data:
         status = str(run_data.get("status", "")).lower()
-        if status == "completed":
+        if status in ("completed", "review_required"):
             max_accessible_stage = 3
-        elif status == "review_required":
-            max_accessible_stage = 2
-        elif status in ("processing", "pending", "queued", "failed", "cancelled"):
+        elif status in ("processing", "pending", "queued"):
+            max_accessible_stage = 1
+        elif status in ("failed", "cancelled"):
             max_accessible_stage = 1
 
     # Automatic stage synchronization if on an invalid stage
@@ -96,6 +96,10 @@ def render_workspace(client: APIClient) -> None:
 
 def _render_stage_upload(client: APIClient) -> None:
     """Stage 1: Upload technical documents and launch analysis."""
+    if "default_model" not in st.session_state or not st.session_state["default_model"]:
+        persisted_pref = client.get_model_preference()
+        st.session_state["default_model"] = persisted_pref or "qwen3:4b"
+
     default_model = st.session_state.get("default_model", "qwen3:4b")
 
     col_pdf, col_excel = st.columns([1, 1], gap="large")
@@ -136,6 +140,33 @@ def _render_stage_upload(client: APIClient) -> None:
 
     st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
 
+    # Model Selection Bar
+    models = client.get_models()
+    if not models:
+        models = [
+            {"model_tag": "qwen3:4b", "display_name": "Qwen 3 4B (Recommended)"},
+            {"model_tag": "qwen2.5:3b", "display_name": "Qwen 2.5 3B"},
+            {"model_tag": "phi3.5:3.8b", "display_name": "Phi-3.5 Mini 3.8B"},
+            {"model_tag": "gemma3:4b", "display_name": "Gemma 3 4B"},
+            {"model_tag": "llama3.2:3b", "display_name": "Llama 3.2 3B"},
+        ]
+    model_map: dict[str, dict[str, Any]] = {
+        str(m.get("model_tag") or m.get("tag", "")): m for m in models if isinstance(m, dict)
+    }
+    model_tags = list(model_map.keys())
+    default_idx = model_tags.index(default_model) if default_model in model_tags else 0
+
+    chosen_model = st.selectbox(
+        "Active AI Inference Model",
+        options=model_tags,
+        format_func=lambda tag: f"{model_map[tag].get('display_name', tag)} ({tag})",
+        index=default_idx,
+        key="workspace_upload_model_select",
+        help="Local LLM model to execute tender evaluation. Defaults to your saved Settings preference.",
+    )
+
+    st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
+
     if st.button("Start Compliance Analysis", type="primary", use_container_width=True):
         if not pdf_file or not excel_file:
             render_error_card("Missing Documents", "Both a technical reference PDF and an Excel RFP workbook must be uploaded.")
@@ -149,8 +180,6 @@ def _render_stage_upload(client: APIClient) -> None:
                     excel_bytes = excel_file.getvalue()
                     excel_res = client.upload_excel(excel_bytes, excel_file.name)
                     excel_id = str(excel_res.get("workbook_id") or "")
-
-                    chosen_model: str = default_model
 
                     run_res = client.create_run(
                         pdf_document_id=pdf_id,
@@ -347,6 +376,7 @@ def _render_stage_review(client: APIClient, run_id: str | None, run_data: dict[s
         req_id = str(d.get("requirement_id", f"REQ-{idx}"))
         req_text = str(d.get("requirement_text", ""))
         curr_status = str(d.get("status", "NOT_FOUND"))
+        matched_val = str(d.get("matched_value") or "")
         conf = float(d.get("confidence", 1.0))
         layer = str(d.get("resolving_layer", "N/A"))
         reasoning = str(d.get("reasoning", ""))
@@ -365,6 +395,9 @@ def _render_stage_review(client: APIClient, run_id: str | None, run_data: dict[s
                     f"**Layer:** `{layer}`",
                     unsafe_allow_html=True,
                 )
+                if matched_val:
+                    st.markdown(f"**AI Populated Specification / Value:** `{matched_val}`")
+
                 if reasoning:
                     st.markdown(f"**AI Reasoning:** {reasoning}")
 
@@ -375,8 +408,8 @@ def _render_stage_review(client: APIClient, run_id: str | None, run_data: dict[s
                         val = ev.get("value", "")
                         ev_reason = ev.get("reasoning", "")
                         st.info(f"**{citation}**: `{val}`\n\n_{ev_reason}_")
-                else:
-                    st.caption("No direct citation identified in reference datasheet.")
+                    else:
+                        st.caption("No direct citation identified in reference datasheet.")
 
                 if review_notes:
                     st.markdown(f"**Reviewer Remarks:** `{review_notes}`")
@@ -389,6 +422,7 @@ def _render_stage_review(client: APIClient, run_id: str | None, run_data: dict[s
                         client.submit_review(run_id, [{
                             "requirement_id": req_id,
                             "status": curr_status,
+                            "matched_value": matched_val,
                             "confidence": 1.0,
                             "review_notes": "Approved by reviewer.",
                         }])
@@ -400,6 +434,7 @@ def _render_stage_review(client: APIClient, run_id: str | None, run_data: dict[s
                         client.submit_review(run_id, [{
                             "requirement_id": req_id,
                             "status": "NON_COMPLIANT",
+                            "matched_value": matched_val,
                             "confidence": 1.0,
                             "review_notes": "Marked non-compliant by reviewer.",
                         }])
@@ -412,12 +447,14 @@ def _render_stage_review(client: APIClient, run_id: str | None, run_data: dict[s
                     index=0,
                     key=f"ws_ov_sel_{req_id}",
                 )
+                override_val = st.text_input("Edit Offered Spec", value=matched_val, key=f"ws_val_{req_id}", placeholder="e.g. 128GB DDR5 4800MHz")
                 remarks = st.text_input("Clarification Note", key=f"ws_rem_{req_id}", placeholder="e.g. Approved per vendor spec sheet addendum")
 
                 if st.button("Save Override", key=f"ws_save_{req_id}", type="primary", use_container_width=True):
                     client.submit_review(run_id, [{
                         "requirement_id": req_id,
                         "status": override_sel,
+                        "matched_value": override_val or matched_val,
                         "confidence": 1.0,
                         "review_notes": remarks or "Manual override applied.",
                     }])
@@ -425,7 +462,7 @@ def _render_stage_review(client: APIClient, run_id: str | None, run_data: dict[s
                     st.rerun()
 
     st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
-    if st.button("Proceed to Export & Finalize", type="primary", use_container_width=True):
+    if st.button("Proceed to Export & Finalize", type="primary", use_container_width=True, key="ws_btn_proceed_export"):
         st.session_state["workspace_stage"] = 3
         st.rerun()
 

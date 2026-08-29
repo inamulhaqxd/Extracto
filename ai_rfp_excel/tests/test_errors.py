@@ -1,20 +1,19 @@
+from collections.abc import AsyncGenerator
+
 import pytest
-from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from ai_rfp_excel.app.api.errors import (
-    AppError,
     ConfigurationError,
     DocumentError,
     ProcessingError,
     ValidationError,
-    register_error_handlers,
 )
 from ai_rfp_excel.app.main import app
 
 
 @pytest.fixture
-async def client() -> AsyncClient:
+async def client() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac

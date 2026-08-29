@@ -97,6 +97,17 @@ class APIClient:
         except Exception:
             return []
 
+    def get_model_preference(self) -> str:
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                res = client.get(f"{self.base_url}/ai/preference", headers=self._get_headers())
+                if res.status_code == 200:
+                    data = res.json()
+                    return str(data.get("model_tag") or "qwen3:4b")
+                return "qwen3:4b"
+        except Exception:
+            return "qwen3:4b"
+
     def set_model_preference(self, model_tag: str) -> bool:
         try:
             with httpx.Client(timeout=5.0) as client:

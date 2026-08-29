@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import openpyxl
 import pytest
 
@@ -22,7 +23,7 @@ async def test_complete_end_to_end_rfp_automation_pipeline(
     tmp_path: Path,
 ) -> None:
     """End-to-end integration test: PDF Ingestion -> Excel Analysis -> 5-Layer Matching -> Excel Population -> Validation."""
-    
+
     # 1. Phase 1: PDF Ingestion & Specification Extraction
     router = PageRouter()
     page_types = router.detect_page_type(str(sample_pdf_text_only), 0)

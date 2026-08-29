@@ -5,12 +5,14 @@ from pathlib import Path
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from sqlalchemy import select, update
+from sqlalchemy import select
+
+from ai_rfp_excel.app.api.auth_utils import hash_password
 from ai_rfp_excel.app.database.connection import async_session
 from ai_rfp_excel.app.database.models import User
-from ai_rfp_excel.app.api.auth_utils import hash_password
 
-async def seed():
+
+async def seed() -> None:
     async with async_session() as session:
         result = await session.execute(select(User).where((User.email == "admin@tender.local") | (User.username == "admin")))
         user = result.scalar_one_or_none()

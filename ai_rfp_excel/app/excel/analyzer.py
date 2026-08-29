@@ -30,6 +30,13 @@ REQUIREMENT_KEYWORDS = {
     "technical specification",
     "technical requirement",
     "scope",
+    "question",
+    "questions",
+    "query",
+    "queries",
+    "item description",
+    "parameter",
+    "parameters",
 }
 
 
@@ -58,9 +65,51 @@ REMARKS_KEYWORDS = {
     "clarification",
     "explanation",
     "deviation",
-    "response",
     "reference",
     "evidence",
+    "source section",
+    "source reference",
+    "source citation",
+    "citation",
+    "source",
+    "section reference",
+    "page reference",
+    "proof",
+}
+
+OFFERED_SPEC_KEYWORDS = {
+    "offered",
+    "offered spec",
+    "offered specs",
+    "offered specification",
+    "offered specifications",
+    "offered parameter",
+    "offered model",
+    "offered item",
+    "bidder specification",
+    "bidder specifications",
+    "bidder response",
+    "vendor specification",
+    "vendor response",
+    "proposed specification",
+    "proposed spec",
+    "proposed specs",
+    "proposed value",
+    "proposed model",
+    "make / model",
+    "make and model",
+    "make & model",
+    "brand / model",
+    "actual specification",
+    "supplied specification",
+    "quoted specification",
+    "compliance details",
+    "answer",
+    "ai answer",
+    "ai response",
+    "response",
+    "solution",
+    "proposed solution",
 }
 
 SECTION_KEYWORDS = {
@@ -263,7 +312,7 @@ class ExcelAnalyzer:
 
                 if col_type == ColumnType.REQUIREMENT:
                     current_score += 10
-                elif col_type in (ColumnType.COMPLIANCE, ColumnType.REMARKS, ColumnType.VENDOR):
+                elif col_type in (ColumnType.COMPLIANCE, ColumnType.REMARKS, ColumnType.OFFERED_SPEC, ColumnType.VENDOR):
                     current_score += 5
                 elif col_type in (ColumnType.INDEX, ColumnType.SECTION):
                     current_score += 3
@@ -283,7 +332,7 @@ class ExcelAnalyzer:
             # Requires at least one requirement-like or multi-column structure
             has_req = any(c.column_type == ColumnType.REQUIREMENT for c in detected)
             has_vendor_or_compliance = any(
-                c.column_type in (ColumnType.VENDOR, ColumnType.COMPLIANCE, ColumnType.REMARKS) for c in detected
+                c.column_type in (ColumnType.VENDOR, ColumnType.OFFERED_SPEC, ColumnType.COMPLIANCE, ColumnType.REMARKS) for c in detected
             )
 
             if (has_req or has_vendor_or_compliance or len(detected) >= 2) and current_score > best_score:
@@ -328,12 +377,16 @@ class ExcelAnalyzer:
         if any(kw in val_clean for kw in REMARKS_KEYWORDS):
             return ColumnType.REMARKS, None
 
+        # Check offered specification / proposed value
+        if any(kw in val_clean for kw in OFFERED_SPEC_KEYWORDS):
+            return ColumnType.OFFERED_SPEC, header_text
+
         # Check requirement
         if any(kw in val_clean for kw in REQUIREMENT_KEYWORDS):
             return ColumnType.REQUIREMENT, None
 
         # Check section
-        if any(kw in val_clean for kw in SECTION_KEYWORDS):
+        if any(val_clean == kw or val_clean.startswith(f"{kw} ") or val_clean.startswith(f"{kw}#") for kw in SECTION_KEYWORDS):
             return ColumnType.SECTION, None
 
         # Check vendor / product
@@ -357,6 +410,7 @@ class ExcelAnalyzer:
         max_row = ws.max_row or 1
 
         req_cols = [c for c in columns if c.column_type == ColumnType.REQUIREMENT]
+        offered_spec_cols = [c for c in columns if c.column_type == ColumnType.OFFERED_SPEC]
         vendor_cols = [c for c in columns if c.column_type == ColumnType.VENDOR]
         compliance_cols = [c for c in columns if c.column_type == ColumnType.COMPLIANCE]
         remarks_cols = [c for c in columns if c.column_type == ColumnType.REMARKS]
@@ -414,7 +468,7 @@ class ExcelAnalyzer:
                 is_bold = bool(first_col_cell and first_col_cell.font and first_col_cell.font.bold)
                 has_no_vendor_data = not any(vc.column_index in non_empty for vc in vendor_cols) and not any(
                     cc.column_index in non_empty for cc in compliance_cols
-                )
+                ) and not any(oc.column_index in non_empty for oc in offered_spec_cols)
 
                 if has_section_kw or (is_bold and has_no_vendor_data and len(first_val.split()) <= 6):
                     is_section_header = True
@@ -442,7 +496,6 @@ class ExcelAnalyzer:
                     current_section.subsections.append(single_cell_val)
                 continue
 
-
             if not req_text:
                 # Fallback to any non-empty column text
                 for c_idx, cell in non_empty.items():
@@ -458,11 +511,19 @@ class ExcelAnalyzer:
             req_id = f"REQ-S{sheet_index + 1:02d}-{req_counter:03d}"
             req_counter += 1
 
-            # Map target coordinates for vendors, compliance, remarks
+            # Map target coordinates for offered specs, vendors, compliance, remarks
+            offered_spec_cells: dict[str, str] = {}
+            for oc in offered_spec_cols:
+                offered_spec_cells[oc.header_name] = f"{oc.column_letter}{r}"
+
             vendor_cells: dict[str, str] = {}
             for vc in vendor_cols:
                 v_name = vc.vendor_name or vc.header_name
                 vendor_cells[v_name] = f"{vc.column_letter}{r}"
+            for oc in offered_spec_cols:
+                oc_name = oc.vendor_name or oc.header_name
+                if oc_name not in vendor_cells:
+                    vendor_cells[oc_name] = f"{oc.column_letter}{r}"
 
             compliance_cells: dict[str, str] = {}
             for cc in compliance_cols:
@@ -471,6 +532,15 @@ class ExcelAnalyzer:
             remarks_cells: dict[str, str] = {}
             for rc in remarks_cols:
                 remarks_cells[rc.header_name] = f"{rc.column_letter}{r}"
+
+            # Detect all empty slots in this row across all detected columns
+            empty_slots: list[str] = []
+            for col in columns:
+                if col.column_type in (ColumnType.INDEX, ColumnType.SECTION, ColumnType.REQUIREMENT):
+                    continue
+                cell_val = row_cells.get(col.column_index)
+                if cell_val is None or cell_val.value is None or not str(cell_val.value).strip():
+                    empty_slots.append(f"{col.column_letter}{r}")
 
             raw_row_data = {
                 get_column_letter(c): cell.value for c, cell in non_empty.items()
@@ -485,8 +555,10 @@ class ExcelAnalyzer:
                 requirement_text=req_text,
                 source_cell=source_coord,
                 vendor_cells=vendor_cells,
+                offered_spec_cells=offered_spec_cells,
                 compliance_cells=compliance_cells,
                 remarks_cells=remarks_cells,
+                empty_slots=empty_slots,
                 raw_values=raw_row_data,
             )
 

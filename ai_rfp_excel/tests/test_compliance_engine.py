@@ -1,4 +1,5 @@
 import json
+
 import pytest
 
 from ai_rfp_excel.app.ai.mock_provider import MockLLMProvider

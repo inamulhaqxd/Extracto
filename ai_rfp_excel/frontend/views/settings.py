@@ -42,7 +42,11 @@ def render_settings(client: APIClient) -> None:
         }
         model_tags = list(model_map.keys())
 
-        # Determine current active default model
+        # Determine current active default model (load persisted preference if not yet in session)
+        if "default_model" not in st.session_state or not st.session_state["default_model"]:
+            persisted_pref = client.get_model_preference()
+            st.session_state["default_model"] = persisted_pref or "qwen3:4b"
+
         current_default = st.session_state.get("default_model", "qwen3:4b")
         default_idx = model_tags.index(current_default) if current_default in model_tags else 0
 
@@ -51,6 +55,7 @@ def render_settings(client: APIClient) -> None:
             options=model_tags,
             format_func=lambda tag: f"{model_map[tag].get('display_name', tag)} ({tag}) — RAM: {model_map[tag].get('ram_usage', '~4GB')}, Context: {model_map[tag].get('context_length', '32K')}",
             index=default_idx,
+            key="settings_model_selectbox",
             help="This model is automatically used by the Dashboard when initiating tender compliance evaluations.",
         )
 
@@ -58,9 +63,13 @@ def render_settings(client: APIClient) -> None:
         with col_save:
             if st.button("Save Default Model Preference", type="primary", use_container_width=True):
                 st.session_state["default_model"] = selected_tag
-                client.set_model_preference(selected_tag)
-                st.toast(f"Default model preference saved as {selected_tag}.")
-                st.success(f"Default model preference updated to `{selected_tag}`.")
+                success = client.set_model_preference(selected_tag)
+                if success:
+                    st.toast(f"Default model preference permanently saved as {selected_tag}.")
+                    st.success(f"Default model preference permanently saved as `{selected_tag}`.")
+                else:
+                    st.toast(f"Default model set to {selected_tag}.")
+                    st.success(f"Default model preference set to `{selected_tag}`.")
 
 
     st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)

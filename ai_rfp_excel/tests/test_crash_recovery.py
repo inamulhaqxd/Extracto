@@ -2,7 +2,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 from ai_rfp_excel.app.ingestion.models import (
     ExtractedImage,
     ExtractedTable,

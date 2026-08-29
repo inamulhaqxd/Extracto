@@ -3,6 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from ai_rfp_excel.app.ai.base import OllamaUnreachableError
 from ai_rfp_excel.app.ai.models import AVAILABLE_MODELS, ModelInfo, ModelPreference
@@ -87,15 +88,16 @@ async def update_user_model_preference(
         valid_tags = [m.tag for m in AVAILABLE_MODELS]
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid model tag '{preference.preference_tag if hasattr(preference, 'preference_tag') else preference.model_tag}'. Supported models: {', '.join(valid_tags)}",
+            detail=f"Invalid model tag '{preference.model_tag}'. Supported models: {', '.join(valid_tags)}",
         )
 
-    # Update user's metadata
+    # Update user's metadata and persist to DB
     meta: dict[str, Any] = dict(current_user.metadata_json) if hasattr(current_user, "metadata_json") and current_user.metadata_json else {}
     meta["preferred_llm_model"] = matched.tag
-    if hasattr(current_user, "metadata_json"):
-        current_user.metadata_json = meta
-        db.add(current_user)
-        await db.flush()
+    current_user.metadata_json = meta
+    flag_modified(current_user, "metadata_json")
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
 
     return ModelPreference(model_tag=matched.tag, model_name=matched.name)
