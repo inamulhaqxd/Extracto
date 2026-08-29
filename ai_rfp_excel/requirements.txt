@@ -5,6 +5,8 @@ python-multipart==0.0.9
 
 # Frontend
 streamlit==1.39.0
+streamlit-antd-components>=0.3.0
+extra-streamlit-components>=0.1.71
 
 # Database
 sqlalchemy[asyncio]==2.0.35

@@ -52,6 +52,19 @@ class APIClient:
         except Exception as e:
             return False, f"Connection error: {e!s}"
 
+    def get_me(self) -> dict[str, Any] | None:
+        """Fetch profile of currently authenticated user using active token."""
+        if not self.token:
+            return None
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                res = client.get(f"{self.base_url}/auth/me", headers=self._get_headers())
+                if res.status_code == 200:
+                    return cast(dict[str, Any], res.json())
+                return None
+        except Exception:
+            return None
+
     def get_models(self) -> list[dict[str, Any]]:
         try:
             with httpx.Client(timeout=5.0) as client:
