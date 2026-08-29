@@ -30,6 +30,15 @@ class ModelInfo(BaseModel):
 
 AVAILABLE_MODELS: list[ModelInfo] = [
     ModelInfo(
+        id="qwen3-8b",
+        name="Qwen 3 8B",
+        tag="qwen3:8b",
+        label="Qwen 3 8B — 5GB RAM, 262K context",
+        ram_usage="5GB",
+        context_length="262K",
+        is_default=False,
+    ),
+    ModelInfo(
         id="qwen3-4b",
         name="Qwen 3 4B",
         tag="qwen3:4b",

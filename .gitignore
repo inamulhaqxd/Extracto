@@ -4,11 +4,17 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.venv/
 venv/
 env/
 *.egg-info/
 dist/
 build/
+
+# Linters / Typecheck
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
 
 # Environment
 .env
@@ -40,7 +46,6 @@ logs/
 Thumbs.db
 
 # Test
-.pytest_cache/
 .coverage
 htmlcov/
 
