@@ -1,3 +1,4 @@
+import re
 from ai_rfp_excel.app.ai.base import LLMInterface
 from ai_rfp_excel.app.ai.models import (
     ChatMessage,
@@ -8,6 +9,7 @@ from ai_rfp_excel.app.ai.models import (
 from ai_rfp_excel.app.ai.prompts.compliance_matching import (
     build_compliance_matching_prompt,
 )
+from ai_rfp_excel.app.document.retriever import tokenize
 from ai_rfp_excel.app.matching.models import (
     ComplianceState,
     EvidenceItem,
@@ -17,12 +19,39 @@ from ai_rfp_excel.app.matching.models import (
 
 
 class LLMReasoningLayer:
-    """Layer 5: LLM reasoning for complex, multi-clause, or ambiguous compliance evaluation."""
+    """Layer 5: LLM reasoning for complex, multi-clause, or ambiguous compliance evaluation with relevance ranking."""
 
     name = "llm_reasoning"
 
     def __init__(self, llm_provider: LLMInterface) -> None:
         self.llm_provider = llm_provider
+
+    def _rank_candidate_facts(
+        self,
+        requirement_text: str,
+        facts: list[FactItem],
+        top_k: int = 15,
+    ) -> list[FactItem]:
+        """Rank candidate facts using token overlap and keyword relevance so top facts match requirement."""
+        req_lower = requirement_text.lower()
+        req_tokens = set(tokenize(requirement_text))
+
+        def score_fact(f: FactItem) -> float:
+            f_text = f"{f.field_name or ''} {f.value}".lower()
+            # Token match score
+            score = sum(1.5 for t in req_tokens if t in f_text)
+            # Exact phrase score
+            if len(req_lower) > 5 and req_lower in f_text:
+                score += 8.0
+            # Boost higher confidence facts
+            score += (f.confidence or 0.5) * 0.5
+            return score
+
+        scored = [(f, score_fact(f)) for f in facts]
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        # Return top_k facts
+        return [item[0] for item in scored[:top_k]]
 
     async def evaluate(
         self,
@@ -47,9 +76,12 @@ class LLMReasoningLayer:
             if filtered:
                 candidate_facts = filtered
 
+        # Relevance rank facts against this specific requirement
+        top_facts = self._rank_candidate_facts(requirement_text, candidate_facts, top_k=15)
+
         fact_strings = [
             f"[{f.field_name or 'Spec'} (Page {f.source_page or 'N/A'})] {f.value}"
-            for f in candidate_facts[:15]  # limit context to top 15 facts
+            for f in top_facts
         ]
 
         prompt = build_compliance_matching_prompt(
@@ -76,8 +108,8 @@ class LLMReasoningLayer:
 
             # Create evidence citation
             evidence_items: list[EvidenceItem] = []
-            if candidate_facts:
-                primary_fact = candidate_facts[0]
+            if top_facts:
+                primary_fact = top_facts[0]
                 citation_ref = f"Page {primary_fact.source_page}" if primary_fact.source_page else "Document reference"
                 if primary_fact.source_table_id:
                     citation_ref += f", Table {primary_fact.source_table_id}"

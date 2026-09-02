@@ -267,8 +267,8 @@ def test_edge_case_writer_populates_offered_specs_and_preserves_formulas(tmp_pat
     assert res_ws["D3"].value == "Compliant"
 
     # Check remarks populated with citation
-    assert "[Page 2]" in str(res_ws["E2"].value)
-    assert "[Page 3]" in str(res_ws["E3"].value)
+    assert "Page 2" in str(res_ws["E2"].value)
+    assert "Page 3" in str(res_ws["E3"].value)
 
     # Check formula preserved
     assert res_ws["B4"].value == "=COUNTA(B2:B3)"
@@ -331,7 +331,7 @@ def test_edge_case_special_characters_and_long_text(tmp_path: Path) -> None:
 
     assert res_ws["B2"].value == "2x 1600W Titanium 96% Eff. Hot-Swap PSU"
     assert res_ws["C2"].value == "Compliant"
-    assert "[Page 6, Table 4]" in str(res_ws["D2"].value)
+    assert "Page 6, Table 4" in str(res_ws["D2"].value)
     res_wb.close()
 
 

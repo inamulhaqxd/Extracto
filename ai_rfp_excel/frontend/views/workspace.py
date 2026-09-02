@@ -165,6 +165,13 @@ def _render_stage_upload(client: APIClient) -> None:
         help="Local LLM model to execute tender evaluation. Defaults to your saved Settings preference.",
     )
 
+    include_summary = st.checkbox(
+        "Generate Executive Compliance Summary Dashboard Sheet",
+        value=True,
+        key="workspace_include_summary",
+        help="When checked, adds an Executive Compliance Summary tab as the first sheet in the output workbook. When unchecked, populates only your original template sheets.",
+    )
+
     st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
 
     if st.button("Start Compliance Analysis", type="primary", use_container_width=True):
@@ -186,6 +193,7 @@ def _render_stage_upload(client: APIClient) -> None:
                         workbook_id=excel_id,
                         model_name=chosen_model,
                         vendor_name=None,
+                        include_summary_sheet=include_summary,
                     )
 
                     new_run_id = str(run_res.get("run_id") or "")

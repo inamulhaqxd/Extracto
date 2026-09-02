@@ -1,9 +1,12 @@
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import openpyxl
+from openpyxl.cell.cell import Cell, MergedCell
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.worksheet import Worksheet
 
 from ai_rfp_excel.app.config import settings
 from ai_rfp_excel.app.excel.models import (
@@ -42,11 +45,48 @@ class ExcelWriter:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.validator = ExcelValidator()
 
+    def _safe_set_cell_value(
+        self,
+        ws: Worksheet,
+        cell_coord: str,
+        value: Any,
+        fill: PatternFill | None = None,
+    ) -> None:
+        """Safely write to normal cells and merged cells without raising read-only attribute errors."""
+        if isinstance(value, str):
+            value = "".join(
+                c
+                for c in value
+                if (
+                    ord(c) in (0x9, 0xA, 0xD)
+                    or (0x20 <= ord(c) <= 0xD7FF)
+                    or (0xE000 <= ord(c) <= 0xFFFD)
+                    or (0x10000 <= ord(c) <= 0x10FFFF)
+                )
+            )
+
+        cell = ws[cell_coord]
+        from openpyxl.cell.cell import MergedCell
+
+        if isinstance(cell, MergedCell):
+            for rng in ws.merged_cells.ranges:
+                if cell.coordinate in rng:
+                    top_cell = ws.cell(row=rng.min_row, column=rng.min_col)
+                    setattr(top_cell, "value", value)
+                    if fill:
+                        setattr(top_cell, "fill", fill)
+                    break
+        else:
+            setattr(cell, "value", value)
+            if fill:
+                setattr(cell, "fill", fill)
+
     def populate_workbook(
         self,
         template_path: str | Path,
         analysis: WorkbookAnalysis,
         decisions: list[ComplianceDecision],
+        create_summary: bool = True,
     ) -> PopulationResult:
         """Populate template workbook with compliance results, preserving formatting and formulas."""
         template_file = Path(template_path)
@@ -87,44 +127,75 @@ class ExcelWriter:
                 remarks_parts: list[str] = []
                 if dec.evidence:
                     for ev in dec.evidence:
-                        citation = f"[{ev.citation}]" if ev.citation else ""
-                        remarks_parts.append(f"{citation} {ev.value} - {ev.reasoning}".strip())
+                        if ev.citation:
+                            remarks_parts.append(ev.citation)
+                        elif ev.reasoning:
+                            remarks_parts.append(ev.reasoning)
+                        elif ev.value:
+                            remarks_parts.append(ev.value)
                 elif dec.reasoning:
                     remarks_parts.append(dec.reasoning)
 
-                remarks_text = " | ".join(remarks_parts)
+                remarks_text = " | ".join(dict.fromkeys(remarks_parts)) if remarks_parts else "Specification not found in reference data."
 
                 # 1. Populate compliance cells
                 for _, cell_coord in req.compliance_cells.items():
-                    cell = ws[cell_coord]
-                    cell.value = status_str
-                    if fill:
-                        cell.fill = fill
+                    self._safe_set_cell_value(ws, cell_coord, status_str, fill)
                     total_populated += 1
 
-                # 2. Populate offered specification / proposed value cells
+                # 2. Populate answer / offered specification / proposed value cells
                 matched_val = dec.matched_value or (dec.evidence[0].value if dec.evidence else "")
                 if matched_val:
+                    for _, cell_coord in req.answer_cells.items():
+                        self._safe_set_cell_value(ws, cell_coord, matched_val)
+                        total_populated += 1
+
+                    for _, cell_coord in req.proposed_cells.items():
+                        self._safe_set_cell_value(ws, cell_coord, matched_val)
+                        total_populated += 1
+
                     for _, cell_coord in req.offered_spec_cells.items():
-                        cell = ws[cell_coord]
-                        cell.value = matched_val
+                        self._safe_set_cell_value(ws, cell_coord, matched_val)
                         total_populated += 1
 
                     for _, cell_coord in req.vendor_cells.items():
-                        # Only fill vendor cell if not already populated by compliance or offered spec
-                        if cell_coord not in req.compliance_cells.values() and cell_coord not in req.offered_spec_cells.values():
-                            cell = ws[cell_coord]
-                            cell.value = matched_val
+                        # Only fill vendor cell if not already populated
+                        if (
+                            cell_coord not in req.compliance_cells.values()
+                            and cell_coord not in req.offered_spec_cells.values()
+                            and cell_coord not in req.answer_cells.values()
+                            and cell_coord not in req.proposed_cells.values()
+                        ):
+                            self._safe_set_cell_value(ws, cell_coord, matched_val)
                             total_populated += 1
 
                 # 3. Populate remarks cells
                 for _, cell_coord in req.remarks_cells.items():
-                    cell = ws[cell_coord]
-                    cell.value = remarks_text
+                    self._safe_set_cell_value(ws, cell_coord, remarks_text)
                     total_populated += 1
 
-        # Add Compliance Summary Sheet
-        self._create_summary_sheet(wb, analysis, all_evaluated_decisions or decisions)
+                # 4. Populate total marks cells
+                is_preference = "preference" in req.requirement_text.lower() or "preferred" in req.requirement_text.lower()
+                total_marks_val = "10" if is_preference else "Mandatory"
+                for _, cell_coord in req.total_marks_cells.items():
+                    self._safe_set_cell_value(ws, cell_coord, total_marks_val)
+                    total_populated += 1
+
+                # 5. Populate marks obtained cells
+                if dec.state == ComplianceState.COMPLIANT:
+                    marks_val = "10"
+                elif dec.state == ComplianceState.PARTIALLY_COMPLIANT:
+                    marks_val = "5"
+                else:
+                    marks_val = "0"
+
+                for _, cell_coord in req.marks_cells.items():
+                    self._safe_set_cell_value(ws, cell_coord, marks_val)
+                    total_populated += 1
+
+        # Add Compliance Summary Sheet if requested
+        if create_summary:
+            self._create_summary_sheet(wb, analysis, all_evaluated_decisions or decisions)
 
         # File naming: {original_name}_populated_{timestamp}.xlsx
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -182,10 +253,10 @@ class ExcelWriter:
         )
 
         # Title block
-        ws["B2"] = "RFP COMPLIANCE EVALUATION REPORT"
-        ws["B2"].font = title_font
-        ws["B3"] = f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Source File: {analysis.filename}"
-        ws["B3"].font = subtitle_font
+        cell_b2 = ws.cell(row=2, column=2, value="RFP COMPLIANCE EVALUATION REPORT")
+        cell_b2.font = title_font
+        cell_b3 = ws.cell(row=3, column=2, value=f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Source File: {analysis.filename}")
+        cell_b3.font = subtitle_font
 
         # Calculate Statistics
         total_reqs = len(decisions) if decisions else analysis.total_requirements

@@ -11,13 +11,17 @@ class Base(DeclarativeBase):
     pass
 
 
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    poolclass=NullPool,
-    echo=settings.DEBUG,
-)
-
-async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+try:
+    engine = create_async_engine(
+        settings.DATABASE_URL,
+        poolclass=NullPool,
+        echo=settings.DEBUG,
+    )
+    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+except Exception:
+    # Dummy async session maker if asyncpg driver is not installed
+    engine = None  # type: ignore
+    async_session = async_sessionmaker()  # type: ignore
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

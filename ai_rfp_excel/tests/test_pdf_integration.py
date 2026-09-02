@@ -2,7 +2,16 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-import fitz
+import pytest
+
+try:
+    import fitz
+except Exception:
+    fitz = None
+
+if fitz is None:
+    pytestmark = pytest.mark.skip(reason="PyMuPDF / fitz C++ runtime not installed on host")
+
 from PIL import Image, ImageDraw
 
 from ai_rfp_excel.app.ingestion.models import ProcessingStatus

@@ -45,49 +45,50 @@ class ComplianceEngine:
         requirement_text: str,
         facts: list[FactItem],
     ) -> tuple[bool, list[EvidenceItem]]:
-        """Detect contradictory values among candidate facts from different sources for the same field."""
-        if len(facts) < 2:
+        req_lower = requirement_text.lower().strip()
+        relevant_facts = [
+            f for f in facts
+            if f.field_name and (
+                f.field_name.lower() in req_lower
+                or req_lower in f.field_name.lower()
+                or any(w in req_lower for w in f.field_name.lower().split() if len(w) >= 3)
+            )
+            and "typical" not in f.field_name.lower() and "maximum" not in f.field_name.lower()
+        ]
+        if len(relevant_facts) < 2:
             return False, []
 
-        # Group facts by normalized field name
-        by_field: dict[str, list[FactItem]] = {}
-        for f in facts:
-            key = (f.field_name or "general").strip().lower()
-            by_field.setdefault(key, []).append(f)
+        numeric_facts = []
+        for f in relevant_facts:
+            parsed = parse_numeric_with_unit(f.value)
+            if parsed:
+                _, unit, base_val = parsed
+                numeric_facts.append((base_val, unit, f))
 
-        for _, field_facts in by_field.items():
-            if len(field_facts) >= 2:
-                numeric_facts = []
-                for f in field_facts:
-                    parsed = parse_numeric_with_unit(f.value)
-                    if parsed:
-                        _, unit, base_val = parsed
-                        numeric_facts.append((base_val, unit, f))
-
-                if len(numeric_facts) >= 2:
-                    base_values = {nf[0] for nf in numeric_facts}
-                    if len(base_values) > 1:
-                        # Conflicting values found for the same field
-                        evidence_list = []
-                        for _, _, fact in numeric_facts:
-                            citation = f"Page {fact.source_page}" if fact.source_page else "Document citation"
-                            if fact.source_table_id:
-                                citation += f", Table {fact.source_table_id}"
-                            evidence_list.append(
-                                EvidenceItem(
-                                    source_document_id=fact.source_document_id,
-                                    source_page=fact.source_page,
-                                    source_table_id=fact.source_table_id,
-                                    source_image_id=fact.source_image_id,
-                                    source_type=fact.source_type,
-                                    value=fact.value,
-                                    confidence=0.5,
-                                    extraction_method="conflict_detection",
-                                    citation=citation,
-                                    reasoning=f"Conflicting value '{fact.value}' found in {citation}.",
-                                )
-                            )
-                        return True, evidence_list
+        if len(numeric_facts) >= 2:
+            base_values = {nf[0] for nf in numeric_facts}
+            if len(base_values) > 1:
+                # Conflicting values found for the same field
+                evidence_list = []
+                for _, _, fact in numeric_facts:
+                    citation = f"Page {fact.source_page}" if fact.source_page else "Document citation"
+                    if fact.source_table_id:
+                        citation += f", Table {fact.source_table_id}"
+                    evidence_list.append(
+                        EvidenceItem(
+                            source_document_id=fact.source_document_id,
+                            source_page=fact.source_page,
+                            source_table_id=fact.source_table_id,
+                            source_image_id=fact.source_image_id,
+                            source_type=fact.source_type,
+                            value=fact.value,
+                            confidence=0.5,
+                            extraction_method="conflict_detection",
+                            citation=citation,
+                            reasoning=f"Conflicting value '{fact.value}' found in {citation}.",
+                        )
+                    )
+                return True, evidence_list
 
         return False, []
 

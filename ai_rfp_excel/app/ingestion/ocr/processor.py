@@ -1,4 +1,7 @@
-import fitz
+try:
+    import fitz
+except Exception:
+    fitz = None
 
 from ai_rfp_excel.app.config import settings
 from ai_rfp_excel.app.ingestion.models import OCRResult

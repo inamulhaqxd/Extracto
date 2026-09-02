@@ -29,8 +29,9 @@ from ai_rfp_excel.app.ai.provider import LocalLLMProvider, extract_json_content
 
 
 def test_available_models_catalog() -> None:
-    assert len(AVAILABLE_MODELS) == 5
+    assert len(AVAILABLE_MODELS) == 6
     model_names = [m.name for m in AVAILABLE_MODELS]
+    assert "Qwen 3 8B" in model_names
     assert "Qwen 3 4B" in model_names
     assert "Qwen 2.5 3B" in model_names
     assert "Phi-3.5 Mini 3.8B" in model_names
@@ -49,7 +50,7 @@ async def test_mock_llm_provider_model_listing_and_availability() -> None:
         available_models=["qwen3:4b", "phi3.5:3.8b"]
     )
     models = await provider.list_models()
-    assert len(models) == 5
+    assert len(models) == 6
 
     qwen3 = next(m for m in models if m.id == "qwen3-4b")
     assert qwen3.is_available is True

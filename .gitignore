@@ -37,8 +37,9 @@ data/generated/
 # Docker
 docker-compose.override.yml
 
-# Logs
-*.log
+# Test outputs
+testworkflowfile/*_populated_*.xlsx
+Modelfile_qwen
 logs/
 
 # OS

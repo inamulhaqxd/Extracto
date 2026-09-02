@@ -104,11 +104,19 @@ def process_pdf(
     checkpoint_path: str | Path | None = None,
     auto_checkpoint: bool = True,
 ) -> ProcessingContext:
-    import fitz
-
-    doc = fitz.open(pdf_path)
-    total_pages = len(doc)
-    doc.close()
+    try:
+        import pypdfium2
+        pdf_doc = pypdfium2.PdfDocument(pdf_path)
+        total_pages = len(pdf_doc)
+        pdf_doc.close()
+    except Exception:
+        try:
+            import fitz
+            doc = fitz.open(pdf_path)
+            total_pages = len(doc)
+            doc.close()
+        except Exception:
+            total_pages = 1
 
     if resume_context is not None:
         context = resume_context

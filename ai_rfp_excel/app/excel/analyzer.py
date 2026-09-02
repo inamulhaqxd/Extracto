@@ -37,6 +37,12 @@ REQUIREMENT_KEYWORDS = {
     "item description",
     "parameter",
     "parameters",
+    "field",
+    "fields",
+    "field to extract",
+    "field / question",
+    "attribute",
+    "item",
 }
 
 
@@ -53,6 +59,27 @@ COMPLIANCE_KEYWORDS = {
     "fulfillment",
     "complied / not complied",
     "compliance (yes/no)",
+    "compliance/marks",
+}
+
+TOTAL_MARKS_KEYWORDS = {
+    "total marks",
+    "total mark",
+    "max marks",
+    "max mark",
+    "max score",
+    "weight",
+    "weightage",
+}
+
+MARKS_KEYWORDS = {
+    "marks obtained",
+    "marks obtain",
+    "marks",
+    "score obtained",
+    "score",
+    "points obtained",
+    "points",
 }
 
 REMARKS_KEYWORDS = {
@@ -369,19 +396,31 @@ class ExcelAnalyzer:
         if any(val_clean == kw or val_clean.startswith(f"{kw} ") or val_clean.startswith(f"{kw}#") for kw in INDEX_KEYWORDS):
             return ColumnType.INDEX, None
 
+        # Check remarks / evidence / comments
+        if any(kw in val_clean for kw in REMARKS_KEYWORDS):
+            return ColumnType.REMARKS, None
+
+        # Check total marks
+        if any(kw in val_clean for kw in TOTAL_MARKS_KEYWORDS):
+            return ColumnType.TOTAL_MARKS, None
+
+        # Check marks obtained
+        if any(kw in val_clean for kw in MARKS_KEYWORDS) and "remark" not in val_clean:
+            return ColumnType.MARKS, None
+
         # Check compliance
         if any(kw in val_clean for kw in COMPLIANCE_KEYWORDS):
             return ColumnType.COMPLIANCE, None
 
-        # Check remarks
-        if any(kw in val_clean for kw in REMARKS_KEYWORDS):
-            return ColumnType.REMARKS, None
-
-        # Check offered specification / proposed value
+        # Check offered specification / proposed value / make quoted
         if any(kw in val_clean for kw in OFFERED_SPEC_KEYWORDS):
             return ColumnType.OFFERED_SPEC, header_text
 
-        # Check requirement
+        # Check answer / ai answer / proposed value
+        if any(kw in val_clean for kw in ("ai answer", "extracted value", "actual value", "answer", "proposed value", "vendor answer")):
+            return ColumnType.ANSWER, header_text
+
+        # Check requirement / question
         if any(kw in val_clean for kw in REQUIREMENT_KEYWORDS):
             return ColumnType.REQUIREMENT, None
 
@@ -410,9 +449,13 @@ class ExcelAnalyzer:
         max_row = ws.max_row or 1
 
         req_cols = [c for c in columns if c.column_type == ColumnType.REQUIREMENT]
+        answer_cols = [c for c in columns if c.column_type == ColumnType.ANSWER]
+        proposed_cols = [c for c in columns if c.column_type == ColumnType.PROPOSED]
         offered_spec_cols = [c for c in columns if c.column_type == ColumnType.OFFERED_SPEC]
         vendor_cols = [c for c in columns if c.column_type == ColumnType.VENDOR]
         compliance_cols = [c for c in columns if c.column_type == ColumnType.COMPLIANCE]
+        total_marks_cols = [c for c in columns if c.column_type == ColumnType.TOTAL_MARKS]
+        marks_cols = [c for c in columns if c.column_type == ColumnType.MARKS]
         remarks_cols = [c for c in columns if c.column_type == ColumnType.REMARKS]
 
         # If no explicit requirement column was found, pick the first non-index text column
@@ -511,7 +554,15 @@ class ExcelAnalyzer:
             req_id = f"REQ-S{sheet_index + 1:02d}-{req_counter:03d}"
             req_counter += 1
 
-            # Map target coordinates for offered specs, vendors, compliance, remarks
+            # Map target coordinates for offered specs, answers, vendors, compliance, remarks
+            answer_cells: dict[str, str] = {}
+            for ac in answer_cols:
+                answer_cells[ac.header_name] = f"{ac.column_letter}{r}"
+
+            proposed_cells: dict[str, str] = {}
+            for pc in proposed_cols:
+                proposed_cells[pc.header_name] = f"{pc.column_letter}{r}"
+
             offered_spec_cells: dict[str, str] = {}
             for oc in offered_spec_cols:
                 offered_spec_cells[oc.header_name] = f"{oc.column_letter}{r}"
@@ -528,6 +579,14 @@ class ExcelAnalyzer:
             compliance_cells: dict[str, str] = {}
             for cc in compliance_cols:
                 compliance_cells[cc.header_name] = f"{cc.column_letter}{r}"
+
+            total_marks_cells: dict[str, str] = {}
+            for tmc in total_marks_cols:
+                total_marks_cells[tmc.header_name] = f"{tmc.column_letter}{r}"
+
+            marks_cells: dict[str, str] = {}
+            for mc in marks_cols:
+                marks_cells[mc.header_name] = f"{mc.column_letter}{r}"
 
             remarks_cells: dict[str, str] = {}
             for rc in remarks_cols:
@@ -556,7 +615,11 @@ class ExcelAnalyzer:
                 source_cell=source_coord,
                 vendor_cells=vendor_cells,
                 offered_spec_cells=offered_spec_cells,
+                answer_cells=answer_cells,
+                proposed_cells=proposed_cells,
                 compliance_cells=compliance_cells,
+                total_marks_cells=total_marks_cells,
+                marks_cells=marks_cells,
                 remarks_cells=remarks_cells,
                 empty_slots=empty_slots,
                 raw_values=raw_row_data,

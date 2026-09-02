@@ -142,6 +142,7 @@ class APIClient:
         workbook_id: str,
         model_name: str | None = None,
         vendor_name: str | None = None,
+        include_summary_sheet: bool = True,
     ) -> dict[str, Any]:
         with httpx.Client(timeout=10.0) as client:
             payload = {
@@ -149,6 +150,7 @@ class APIClient:
                 "workbook_id": workbook_id,
                 "model_name": model_name,
                 "vendor_name": vendor_name,
+                "include_summary_sheet": include_summary_sheet,
             }
             res = client.post(f"{self.base_url}/runs", json=payload, headers=self._get_headers())
             if res.status_code in (200, 201):

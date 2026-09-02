@@ -44,6 +44,7 @@ class CreateRunRequest(BaseModel):
     workbook_id: str
     model_name: str | None = None
     vendor_name: str | None = None
+    include_summary_sheet: bool = True
 
 
 class ReviewItem(BaseModel):
@@ -104,6 +105,7 @@ async def execute_pipeline_background(
     wb_id: uuid.UUID,
     model_name: str | None,
     vendor_name: str | None,
+    include_summary_sheet: bool,
     db: AsyncSession,
 ) -> None:
     """Execute end-to-end extraction, matching, and excel population pipeline."""
@@ -189,12 +191,30 @@ async def execute_pipeline_background(
                     pdf_path = Path(settings.UPLOAD_DIR) / f"{pdf_doc_id}.pdf"
 
                 if pdf_path.exists():
-                    import fitz
-                    fitz_doc = fitz.open(str(pdf_path))
-                    for p_num in range(len(fitz_doc)):
-                        page = fitz_doc[p_num]
-                        page_text = page.get_text()
-                        page_index = p_num + 1
+                    pages_text_list: list[tuple[int, str]] = []
+                    try:
+                        import pypdfium2 as pdfium
+                        pdf_obj = pdfium.PdfDocument(str(pdf_path))
+                        for p_idx, p in enumerate(pdf_obj):
+                            pages_text_list.append((p_idx + 1, p.get_textpage().get_text_range() or ""))
+                        pdf_obj.close()
+                    except Exception:
+                        try:
+                            import pdfplumber
+                            with pdfplumber.open(str(pdf_path)) as pdf_obj:
+                                for p_idx, p in enumerate(pdf_obj.pages):
+                                    pages_text_list.append((p_idx + 1, p.extract_text() or ""))
+                        except Exception:
+                            try:
+                                import fitz
+                                fitz_doc = fitz.open(str(pdf_path))
+                                for p_idx in range(len(fitz_doc)):
+                                    pages_text_list.append((p_idx + 1, fitz_doc[p_idx].get_text() or ""))
+                                fitz_doc.close()
+                            except Exception:
+                                pages_text_list = []
+
+                    for page_index, page_text in pages_text_list:
                         if page_text and page_text.strip():
                             doc_page = DocumentPage(
                                 document_id=pdf_doc_id,
@@ -238,7 +258,6 @@ async def execute_pipeline_background(
                                     source_type="text",
                                 )
                                 db.add(ef)
-                    fitz_doc.close()
                     await db.commit()
 
         run.progress = 50.0
@@ -282,6 +301,7 @@ async def execute_pipeline_background(
             template_path=wb_path,
             analysis=analysis,
             decisions=all_decisions,
+            create_summary=include_summary_sheet,
         )
 
         # Step 6: Complete run record
@@ -370,6 +390,7 @@ async def create_processing_run(
         wb_id=wb_uuid,
         model_name=selected_model,
         vendor_name=request.vendor_name,
+        include_summary_sheet=request.include_summary_sheet,
         db=db,
     )
 
