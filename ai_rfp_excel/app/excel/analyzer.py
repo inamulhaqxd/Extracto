@@ -297,12 +297,12 @@ class ExcelAnalyzer:
         hidden_rows: list[int] = []
         for r_idx, dimension in ws.row_dimensions.items():
             if dimension.hidden:
-                hidden_rows.append(int(r_idx))
+                hidden_rows.append(r_idx)
 
         hidden_cols: list[str] = []
         for col_letter, dimension in ws.column_dimensions.items():
             if dimension.hidden:
-                hidden_cols.append(str(col_letter))
+                hidden_cols.append(col_letter)
 
         return sorted(hidden_rows), sorted(hidden_cols)
 

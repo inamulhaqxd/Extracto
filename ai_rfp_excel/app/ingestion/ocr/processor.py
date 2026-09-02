@@ -17,21 +17,27 @@ def render_page_to_image(
 
     output_path = Path(output_dir or settings.PROCESSED_DIR)
     output_path.mkdir(parents=True, exist_ok=True)
-
-    doc = fitz.open(pdf_path)
-    page = doc[page_number]
-
-    zoom = dpi / 72
-    matrix = fitz.Matrix(zoom, zoom)
-    pix = page.get_pixmap(matrix=matrix)
-
     image_filename = f"page_{page_number + 1:04d}.png"
     image_path = output_path / image_filename
 
-    pix.save(str(image_path))
-
-    doc.close()
-    return str(image_path)
+    if fitz is not None:
+        doc = fitz.open(pdf_path)
+        page = doc[page_number]
+        zoom = dpi / 72
+        matrix = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=matrix)
+        pix.save(str(image_path))
+        doc.close()
+        return str(image_path)
+    else:
+        import pypdfium2
+        pdf = pypdfium2.PdfDocument(pdf_path)
+        page = pdf[page_number]
+        scale = dpi / 72
+        pil_image = page.render(scale=scale).to_pil()
+        pil_image.save(str(image_path))
+        pdf.close()
+        return str(image_path)
 
 
 def render_pages_batch(
@@ -133,9 +139,18 @@ def ocr_page(
 
 
 def needs_ocr(pdf_path: str, page_number: int, text_threshold: int = 50) -> bool:
-    doc = fitz.open(pdf_path)
-    page = doc[page_number]
-    text = page.get_text()
-    doc.close()
-    return len(text.strip()) < text_threshold
+    if fitz is not None:
+        doc = fitz.open(pdf_path)
+        page = doc[page_number]
+        text = page.get_text()
+        doc.close()
+        return len(text.strip()) < text_threshold
+    else:
+        import pypdfium2
+        pdf = pypdfium2.PdfDocument(pdf_path)
+        page = pdf[page_number]
+        textpage = page.get_textpage()
+        text = textpage.get_text_range()
+        pdf.close()
+        return len(text.strip()) < text_threshold
 

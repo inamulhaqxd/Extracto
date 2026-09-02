@@ -1,3 +1,4 @@
+from pathlib import Path
 try:
     import fitz
 except Exception:
@@ -38,46 +39,32 @@ def extract_images_from_page(
         xref = img[0]
         try:
             base_image = doc.extract_image(xref)
-            if not base_image:
-                continue
-
-            width = base_image.get("width", 0)
-            height = base_image.get("height", 0)
-
-            # Filter out tiny icons, decorative headers, bullets, or thin line borders
-            if filter_small:
-                if width < MIN_IMAGE_WIDTH or height < MIN_IMAGE_HEIGHT:
-                    continue
-                if (width * height) < MIN_IMAGE_PIXELS:
-                    continue
-                aspect = max(width, height) / max(min(width, height), 1)
-                if aspect > 15:  # Line or divider bar
-                    continue
-
             image_bytes = base_image["image"]
             image_ext = base_image["ext"]
+            width = base_image["width"]
+            height = base_image["height"]
 
-            image_id = f"IMG{page_number + 1:02d}-{img_idx + 1:02d}"
-            image_filename = f"{image_id}.{image_ext}"
-            image_filepath = output_path / image_filename
+            if filter_small and (
+                width < MIN_IMAGE_WIDTH
+                or height < MIN_IMAGE_HEIGHT
+                or (width * height) < MIN_IMAGE_PIXELS
+            ):
+                continue
 
-            with open(image_filepath, "wb") as f:
+            image_filename = f"page_{page_number + 1:04d}_img_{img_idx + 1:02d}.{image_ext}"
+            image_file_path = output_path / image_filename
+
+            with open(image_file_path, "wb") as f:
                 f.write(image_bytes)
-
-            bbox_dict = {
-                "x": img[2] if len(img) > 2 else 0,
-                "y": img[3] if len(img) > 3 else 0,
-                "width": width,
-                "height": height,
-            }
 
             images.append(
                 ExtractedImage(
+                    image_id=f"IMG-P{page_number + 1:02d}-{img_idx + 1:02d}",
                     page_number=page_number,
-                    image_id=image_id,
-                    image_path=str(image_filepath),
-                    bbox=bbox_dict,
-                    extraction_method="pymupdf",
+                    image_path=str(image_file_path),
+                    width=width,
+                    height=height,
+                    format=image_ext,
                 )
             )
         except Exception:
@@ -92,6 +79,9 @@ def extract_images_from_pdf(
     output_dir: str | None = None,
     filter_small: bool = True,
 ) -> list[ExtractedImage]:
+    if fitz is None:
+        return []
+
     all_images: list[ExtractedImage] = []
 
     doc = fitz.open(pdf_path)
@@ -106,6 +96,8 @@ def extract_images_from_pdf(
 
 
 def has_images(pdf_path: str, page_number: int) -> bool:
+    if fitz is None:
+        return False
     doc = fitz.open(pdf_path)
     if page_number >= len(doc):
         doc.close()

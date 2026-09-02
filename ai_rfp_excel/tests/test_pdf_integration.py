@@ -19,6 +19,8 @@ from ai_rfp_excel.app.ingestion.pdf.processor import process_pdf, retry_failed_p
 
 
 def create_sample_test_pdf(pdf_path: str) -> None:
+    if fitz is None:
+        return
     doc = fitz.open()
 
     # Page 1: Native Text

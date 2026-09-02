@@ -133,6 +133,7 @@ def sample_excel_standard(tmp_path: Path) -> Path:
     """Create a standard RFP Excel template workbook."""
     wb = openpyxl.Workbook()
     ws = wb.active
+    assert ws is not None
     ws.title = "Technical Compliance"
 
     headers = ["Item #", "Technical Requirement", "Compliance Status", "Remarks / Evidence"]
@@ -169,6 +170,7 @@ def sample_excel_renamed_cols(tmp_path: Path) -> Path:
     """Create an Excel template with non-standard renamed headers and rearranged columns."""
     wb = openpyxl.Workbook()
     ws = wb.active
+    assert ws is not None
     ws.title = "Vendor Bids"
 
     # Rearranged order: Remarks first, then Specs, then Compliance, then Serial

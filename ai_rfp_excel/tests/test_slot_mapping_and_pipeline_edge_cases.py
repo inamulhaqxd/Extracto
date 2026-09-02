@@ -20,6 +20,7 @@ def test_edge_case_custom_offered_spec_and_empty_slots(tmp_path: Path) -> None:
     """Edge Case: Complex sheet with 'Offered Specification', 'Make / Model', 'Compliance', 'Remarks', and empty slots."""
     wb = openpyxl.Workbook()
     ws = wb.active
+    assert ws is not None
     ws.title = "Custom Matrix"
 
     # Multi-slot header with non-standard names
@@ -84,6 +85,7 @@ def test_edge_case_merged_cells_and_blank_rows(tmp_path: Path) -> None:
     """Edge Case: Worksheets with merged cells across titles and sporadic blank rows."""
     wb = openpyxl.Workbook()
     ws = wb.active
+    assert ws is not None
     ws.title = "Merged Sheet"
 
     # Row 1: Merged Title Block
@@ -131,6 +133,7 @@ def test_edge_case_multi_sheet_diverse_layouts(tmp_path: Path) -> None:
 
     # Sheet 1: Servers
     ws1 = wb.active
+    assert ws1 is not None
     ws1.title = "Servers"
     ws1.cell(row=1, column=1, value="Req #")
     ws1.cell(row=1, column=2, value="Description")
@@ -170,6 +173,7 @@ def test_edge_case_writer_populates_offered_specs_and_preserves_formulas(tmp_pat
     """Edge Case: Verify writer populates offered specs, compliance styling, and preserves formulas & formatting."""
     wb = openpyxl.Workbook()
     ws = wb.active
+    assert ws is not None
     ws.title = "Compliance Matrix"
 
     # Header with styling
@@ -280,6 +284,7 @@ def test_edge_case_special_characters_and_long_text(tmp_path: Path) -> None:
     """Edge Case: Handles special characters, quotes, and long strings safely."""
     wb = openpyxl.Workbook()
     ws = wb.active
+    assert ws is not None
     ws.title = "Special Chars"
 
     ws.cell(row=1, column=1, value="Requirement")
