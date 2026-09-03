@@ -46,6 +46,12 @@ class ComplianceEngine:
         facts: list[FactItem],
     ) -> tuple[bool, list[EvidenceItem]]:
         req_lower = requirement_text.lower().strip()
+
+        # If requirement asks for a specific scoped metric, evaluate directly rather than flagging ambiguity
+        scope_qualifiers = ("typical", "max", "maximum", "peak", "idle", "standby", "nominal", "minimum", "min")
+        if any(sq in req_lower for sq in scope_qualifiers):
+            return False, []
+
         relevant_facts = [
             f for f in facts
             if f.field_name and (
@@ -53,7 +59,7 @@ class ComplianceEngine:
                 or req_lower in f.field_name.lower()
                 or any(w in req_lower for w in f.field_name.lower().split() if len(w) >= 3)
             )
-            and "typical" not in f.field_name.lower() and "maximum" not in f.field_name.lower()
+            and not any(sq in f.field_name.lower() or (f.value and sq in f.value.lower()) for sq in scope_qualifiers)
         ]
         if len(relevant_facts) < 2:
             return False, []

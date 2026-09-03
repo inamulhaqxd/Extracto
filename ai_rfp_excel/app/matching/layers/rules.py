@@ -180,4 +180,115 @@ class RuleBasedLayer:
                 if best_res is not None:
                     return best_res
 
+        # 3. Universal Technical Pattern & Entity Extractors
+        all_facts_text = " \n ".join(f"{f.field_name or ''}: {f.value}" for f in candidate_facts)
+
+        # Port configuration pattern (e.g. 16 x 10-Gigabit SFP+, 2 x 100-Gigabit QSFP28)
+        if any(w in req_lower for w in ("port", "sfp", "qsfp", "interfaces", "uplink")):
+            if "100g" in req_lower or "qsfp" in req_lower:
+                m_port = re.search(r"\b(\d+\s*x\s*[^\n\.,]*100[^\n\.,]*QSFP\d*[^\n\.,]*)", all_facts_text, re.IGNORECASE)
+                if not m_port:
+                    m_port = re.search(r"\b(\d+\s*x\s*[^\n\.,]*QSFP\d*[^\n\.,]*)", all_facts_text, re.IGNORECASE)
+            elif "10g" in req_lower or "sfp" in req_lower:
+                m_port = re.search(r"\b(\d+\s*x\s*[^\n\.,]*10[^\n\.,]*SFP\+?[^\n\.,]*)", all_facts_text, re.IGNORECASE)
+                if not m_port:
+                    m_port = re.search(r"\b(\d+\s*x\s*[^\n\.,]*SFP\+?[^\n\.,]*)", all_facts_text, re.IGNORECASE)
+            else:
+                m_port = re.search(r"\b(\d+\s*x\s*[^\n\.,]+(?:ports?|uplinks?|interfaces?))", all_facts_text, re.IGNORECASE)
+
+            if m_port:
+                port_val = m_port.group(1).strip()
+                top_page = candidate_facts[0].source_page if candidate_facts else 1
+                evidence = EvidenceItem(
+                    source_page=top_page,
+                    value=port_val,
+                    confidence=0.96,
+                    extraction_method=self.name,
+                    citation=f"Port Configuration (Page {top_page})",
+                    reasoning=f"Extracted port configuration specification: '{port_val}'.",
+                )
+                return LayerResult(
+                    layer_name=self.name,
+                    state=ComplianceState.COMPLIANT,
+                    confidence=0.96,
+                    reasoning=f"Port configuration resolved: '{port_val}'.",
+                    matched_value=port_val,
+                    evidence=[evidence],
+                )
+
+        # Warranty pattern (e.g. standard 3-year limited hardware warranty)
+        if any(w in req_lower for w in ("warranty", "support length", "guarantee")):
+            m_warr = re.search(r"\b(\d+[\s\-]*(?:year|yr)s?(?:\s+(?:limited|hardware|standard)?\s*warranty)?)\b", all_facts_text, re.IGNORECASE)
+            if m_warr:
+                warr_val = m_warr.group(1).strip()
+                top_page = candidate_facts[0].source_page if candidate_facts else 1
+                evidence = EvidenceItem(
+                    source_page=top_page,
+                    value=warr_val,
+                    confidence=0.96,
+                    extraction_method=self.name,
+                    citation=f"Warranty & Support (Page {top_page})",
+                    reasoning=f"Extracted warranty specification: '{warr_val}'.",
+                )
+                return LayerResult(
+                    layer_name=self.name,
+                    state=ComplianceState.COMPLIANT,
+                    confidence=0.96,
+                    reasoning=f"Warranty specification resolved: '{warr_val}'.",
+                    matched_value=warr_val,
+                    evidence=[evidence],
+                )
+
+        # Price / Currency pattern (e.g. $4,250 USD, €1,200)
+        if any(w in req_lower for w in ("price", "cost", "usd", "list price", "$")):
+            m_price = re.search(r"(\$[\d,]+(?:\.\d+)?(?:\s*USD)?)", all_facts_text, re.IGNORECASE)
+            if m_price:
+                price_val = m_price.group(1).strip()
+                top_page = candidate_facts[0].source_page if candidate_facts else 1
+                evidence = EvidenceItem(
+                    source_page=top_page,
+                    value=price_val,
+                    confidence=0.96,
+                    extraction_method=self.name,
+                    citation=f"Pricing Reference (Page {top_page})",
+                    reasoning=f"Extracted list price: '{price_val}'.",
+                )
+                return LayerResult(
+                    layer_name=self.name,
+                    state=ComplianceState.COMPLIANT,
+                    confidence=0.96,
+                    reasoning=f"List price resolved: '{price_val}'.",
+                    matched_value=price_val,
+                    evidence=[evidence],
+                )
+
+        # Power draw pattern
+        if any(w in req_lower for w in ("power", "draw", "watt", "watts")):
+            if "typical" in req_lower:
+                m_pow = re.search(r"(?i)(?:typical|nominal)[^\n\.,:]*[:\-\s]+(\d+\s*W)", all_facts_text)
+            elif "max" in req_lower or "maximum" in req_lower or "peak" in req_lower:
+                m_pow = re.search(r"(?i)(?:max|maximum|peak)[^\n\.,:]*[:\-\s]+(\d+\s*W)", all_facts_text)
+            else:
+                m_pow = re.search(r"\b(\d+\s*W)\b", all_facts_text, re.IGNORECASE)
+
+            if m_pow:
+                pow_val = m_pow.group(1).strip()
+                top_page = candidate_facts[0].source_page if candidate_facts else 1
+                evidence = EvidenceItem(
+                    source_page=top_page,
+                    value=pow_val,
+                    confidence=0.96,
+                    extraction_method=self.name,
+                    citation=f"Power Specifications (Page {top_page})",
+                    reasoning=f"Extracted power draw specification: '{pow_val}'.",
+                )
+                return LayerResult(
+                    layer_name=self.name,
+                    state=ComplianceState.COMPLIANT,
+                    confidence=0.96,
+                    reasoning=f"Power draw resolved: '{pow_val}'.",
+                    matched_value=pow_val,
+                    evidence=[evidence],
+                )
+
         return None

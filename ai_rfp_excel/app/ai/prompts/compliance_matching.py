@@ -23,7 +23,7 @@ def build_compliance_matching_prompt(
         '  "status": "COMPLIANT" | "NON_COMPLIANT" | "PARTIAL" | "AMBIGUOUS",\n'
         '  "confidence": 0.95,\n'
         '  "reasoning": "Clear, concise technical justification",\n'
-        '  "matched_value": "Specific product model or feature that complies",\n'
+        '  "matched_value": "Extract ONLY the exact technical value, measurement, price, count, or spec (e.g. \'$4,250\', \'16 ports\', \'3 years\'). Do NOT return product names, subject nouns, or headers.",\n'
         '  "evidence_text": "Exact supporting text quote from facts"\n'
         "}"
     )
