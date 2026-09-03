@@ -15,6 +15,7 @@ build/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+.cache/
 
 # Environment
 .env
