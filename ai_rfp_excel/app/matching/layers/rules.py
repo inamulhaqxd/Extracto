@@ -11,19 +11,56 @@ from ai_rfp_excel.app.matching.models import (
 
 
 class RuleBasedLayer:
-    """Layer 2: Rule-based & arithmetic comparisons (>=, <=, at least, minimum, redundant)."""
+    """Layer 2: Strict arithmetic, quantity threshold & redundancy rule verification.
+
+    Resolves explicitly defined numeric criteria (>=, <=, at least, redundant) against
+    semantically relevant facts. Leaves broader and contextual technical matching to the AI layer.
+    """
 
     name = "rule_based"
 
     # Regex patterns for comparison operators
     OP_PATTERNS: ClassVar[list[tuple[str, str]]] = [
-        (r"(?i)\b(?:at least|minimum of|minimum|min|>=|>=)\s*(\d+(?:\.\d+)?\s*[a-zA-Z]*)", ">="),
-        (r"(?i)\b(?:up to|maximum of|maximum|max|<=|<=)\s*(\d+(?:\.\d+)?\s*[a-zA-Z]*)", "<="),
-        (r"(?i)\b(?:greater than|>)\s*(\d+(?:\.\d+)?\s*[a-zA-Z]*)", ">"),
-        (r"(?i)\b(?:less than|<)\s*(\d+(?:\.\d+)?\s*[a-zA-Z]*)", "<"),
-        (r"(?i)\b(?:exactly|=|==)\s*(\d+(?:\.\d+)?\s*[a-zA-Z]*)", "="),
+        (r"(?i)\b(?:at least|minimum of|minimum|min|>=)\s*(\d+(?:\.\d+)?\s*[a-zA-Z%]+)", ">="),
+        (r"(?i)\b(?:up to|maximum of|maximum|max|<=)\s*(\d+(?:\.\d+)?\s*[a-zA-Z%]+)", "<="),
+        (r"(?i)\b(?:greater than|>)\s*(\d+(?:\.\d+)?\s*[a-zA-Z%]+)", ">"),
+        (r"(?i)\b(?:less than|<)\s*(\d+(?:\.\d+)?\s*[a-zA-Z%]+)", "<"),
+        (r"(?i)\b(?:exactly|=|==)\s*(\d+(?:\.\d+)?\s*[a-zA-Z%]+)", "="),
     ]
 
+    def _is_relevant_field(self, req_text: str, fact: FactItem, req_unit: str | None = None) -> bool:
+        """Verify the fact is actually relevant to the requirement to avoid cross-domain false positives."""
+        req_lower = req_text.lower()
+        f_name_lower = (fact.field_name or "").lower()
+        f_val_lower = fact.value.lower()
+
+        # Check field name words
+        if f_name_lower and len(f_name_lower) >= 3:
+            f_words = [w for w in re.findall(r"[a-z0-9]+", f_name_lower) if len(w) >= 3]
+            if f_words and any(w in req_lower for w in f_words):
+                return True
+
+        # Check matching unit families (e.g. both are TB/GB/terabytes)
+        if req_unit:
+            fact_parsed = parse_numeric_with_unit(fact.value)
+            if fact_parsed:
+                _, f_unit, _ = fact_parsed
+                storage_units = {"tb", "gb", "mb", "pb", "terabytes", "gigabytes", "megabytes", "petabytes"}
+                power_units = {"w", "kw", "mw", "watts", "kilowatts"}
+                rate_units = {"gbps", "mbps", "tbps", "kbps"}
+                freq_units = {"ghz", "mhz", "khz"}
+
+                for u_family in (storage_units, power_units, rate_units, freq_units):
+                    if req_unit.lower() in u_family and f_unit.lower() in u_family:
+                        return True
+
+        # Common domain matches
+        domains = ["power", "watt", "throughput", "bandwidth", "memory", "ram", "storage", "capacity", "fan", "cooling", "psu"]
+        for d in domains:
+            if d in req_lower and (d in f_name_lower or d in f_val_lower):
+                return True
+
+        return False
 
     def evaluate(
         self,
@@ -48,10 +85,12 @@ class RuleBasedLayer:
             if filtered:
                 candidate_facts = filtered
 
-        # 1. Check redundancy & dual architecture rules
+        # 1. Redundancy / Dual architecture verification
         if any(rk in req_lower for rk in ("redundant", "redundancy", "dual power")):
             redundancy_keywords = ("redundant", "dual", "hot-swap", "hot-pluggable", "2x", "n+1")
             for fact in candidate_facts:
+                if not self._is_relevant_field(requirement_text, fact):
+                    continue
                 f_val_lower = fact.value.lower()
                 if any(rk in f_val_lower for rk in redundancy_keywords):
                     citation_ref = f"Page {fact.source_page}" if fact.source_page else "Document reference"
@@ -76,71 +115,23 @@ class RuleBasedLayer:
                         evidence=[evidence],
                     )
 
-        # 2. Check numeric / quantity operator rules (at least, minimum, maximum, >=, <=, etc.)
+        # 2. Check numeric quantity operator rules with strict unit and field validation
         for pat, op in self.OP_PATTERNS:
             match = re.search(pat, requirement_text)
             if match:
                 req_threshold_str = match.group(1).strip()
                 req_parsed = parse_numeric_with_unit(req_threshold_str)
+                if not req_parsed:
+                    continue
 
+                _, req_unit, _ = req_parsed
                 best_res: LayerResult | None = None
 
                 for fact in candidate_facts:
-                    fact_parsed = parse_numeric_with_unit(fact.value)
-                    if not fact_parsed or not req_parsed:
-                        # Try pure numeric comparison if unit is missing
-                        num_match_req = re.search(r"(\d+(?:\.\d+)?)", req_threshold_str)
-                        num_match_fact = re.search(r"(\d+(?:\.\d+)?)", fact.value)
-                        if num_match_req and num_match_fact:
-                            val_req = float(num_match_req.group(1))
-                            val_fact = float(num_match_fact.group(1))
-                            if op == ">=":
-                                is_valid = val_fact >= val_req
-                            elif op == "<=":
-                                is_valid = val_fact <= val_req
-                            elif op == ">":
-                                is_valid = val_fact > val_req
-                            elif op == "<":
-                                is_valid = val_fact < val_req
-                            else:
-                                is_valid = abs(val_fact - val_req) < 1e-6
-
-                            citation_ref = f"Page {fact.source_page}" if fact.source_page else "Document reference"
-                            if fact.source_table_id:
-                                citation_ref += f", Table {fact.source_table_id}"
-
-                            evidence = EvidenceItem(
-                                source_document_id=fact.source_document_id,
-                                source_page=fact.source_page,
-                                source_table_id=fact.source_table_id,
-                                source_image_id=fact.source_image_id,
-                                source_type=fact.source_type,
-                                value=fact.value,
-                                confidence=0.95,
-                                extraction_method=self.name,
-                                citation=citation_ref,
-                                reasoning=f"Numeric rule evaluation: {val_fact} {op} {val_req} (Requirement: {req_threshold_str}).",
-                            )
-
-                            current_res = LayerResult(
-                                layer_name=self.name,
-                                state=ComplianceState.COMPLIANT if is_valid else ComplianceState.NON_COMPLIANT,
-                                confidence=0.95,
-                                reasoning=(
-                                    f"Provided value '{fact.value}' satisfies requirement '{req_threshold_str}' ({op})."
-                                    if is_valid
-                                    else f"Provided value '{fact.value}' fails requirement threshold '{req_threshold_str}' ({op})."
-                                ),
-                                matched_value=fact.value,
-                                evidence=[evidence],
-                            )
-                            if is_valid:
-                                return current_res
-                            if best_res is None:
-                                best_res = current_res
+                    if not self._is_relevant_field(requirement_text, fact, req_unit=req_unit):
                         continue
 
-                    # Quantity comparison with unit conversion
+                    # Strict quantity comparison with unit conversion
                     res = compare_quantities(fact.value, req_threshold_str, operator=op)
                     if res is not None:
                         citation_ref = f"Page {fact.source_page}" if fact.source_page else "Document reference"
@@ -180,115 +171,5 @@ class RuleBasedLayer:
                 if best_res is not None:
                     return best_res
 
-        # 3. Universal Technical Pattern & Entity Extractors
-        all_facts_text = " \n ".join(f"{f.field_name or ''}: {f.value}" for f in candidate_facts)
-
-        # Port configuration pattern (e.g. 16 x 10-Gigabit SFP+, 2 x 100-Gigabit QSFP28)
-        if any(w in req_lower for w in ("port", "sfp", "qsfp", "interfaces", "uplink")):
-            if "100g" in req_lower or "qsfp" in req_lower:
-                m_port = re.search(r"\b(\d+\s*x\s*[^\n\.,]*100[^\n\.,]*QSFP\d*[^\n\.,]*)", all_facts_text, re.IGNORECASE)
-                if not m_port:
-                    m_port = re.search(r"\b(\d+\s*x\s*[^\n\.,]*QSFP\d*[^\n\.,]*)", all_facts_text, re.IGNORECASE)
-            elif "10g" in req_lower or "sfp" in req_lower:
-                m_port = re.search(r"\b(\d+\s*x\s*[^\n\.,]*10[^\n\.,]*SFP\+?[^\n\.,]*)", all_facts_text, re.IGNORECASE)
-                if not m_port:
-                    m_port = re.search(r"\b(\d+\s*x\s*[^\n\.,]*SFP\+?[^\n\.,]*)", all_facts_text, re.IGNORECASE)
-            else:
-                m_port = re.search(r"\b(\d+\s*x\s*[^\n\.,]+(?:ports?|uplinks?|interfaces?))", all_facts_text, re.IGNORECASE)
-
-            if m_port:
-                port_val = m_port.group(1).strip()
-                top_page = candidate_facts[0].source_page if candidate_facts else 1
-                evidence = EvidenceItem(
-                    source_page=top_page,
-                    value=port_val,
-                    confidence=0.96,
-                    extraction_method=self.name,
-                    citation=f"Port Configuration (Page {top_page})",
-                    reasoning=f"Extracted port configuration specification: '{port_val}'.",
-                )
-                return LayerResult(
-                    layer_name=self.name,
-                    state=ComplianceState.COMPLIANT,
-                    confidence=0.96,
-                    reasoning=f"Port configuration resolved: '{port_val}'.",
-                    matched_value=port_val,
-                    evidence=[evidence],
-                )
-
-        # Warranty pattern (e.g. standard 3-year limited hardware warranty)
-        if any(w in req_lower for w in ("warranty", "support length", "guarantee")):
-            m_warr = re.search(r"\b(\d+[\s\-]*(?:year|yr)s?(?:\s+(?:limited|hardware|standard)?\s*warranty)?)\b", all_facts_text, re.IGNORECASE)
-            if m_warr:
-                warr_val = m_warr.group(1).strip()
-                top_page = candidate_facts[0].source_page if candidate_facts else 1
-                evidence = EvidenceItem(
-                    source_page=top_page,
-                    value=warr_val,
-                    confidence=0.96,
-                    extraction_method=self.name,
-                    citation=f"Warranty & Support (Page {top_page})",
-                    reasoning=f"Extracted warranty specification: '{warr_val}'.",
-                )
-                return LayerResult(
-                    layer_name=self.name,
-                    state=ComplianceState.COMPLIANT,
-                    confidence=0.96,
-                    reasoning=f"Warranty specification resolved: '{warr_val}'.",
-                    matched_value=warr_val,
-                    evidence=[evidence],
-                )
-
-        # Price / Currency pattern (e.g. $4,250 USD, €1,200)
-        if any(w in req_lower for w in ("price", "cost", "usd", "list price", "$")):
-            m_price = re.search(r"(\$[\d,]+(?:\.\d+)?(?:\s*USD)?)", all_facts_text, re.IGNORECASE)
-            if m_price:
-                price_val = m_price.group(1).strip()
-                top_page = candidate_facts[0].source_page if candidate_facts else 1
-                evidence = EvidenceItem(
-                    source_page=top_page,
-                    value=price_val,
-                    confidence=0.96,
-                    extraction_method=self.name,
-                    citation=f"Pricing Reference (Page {top_page})",
-                    reasoning=f"Extracted list price: '{price_val}'.",
-                )
-                return LayerResult(
-                    layer_name=self.name,
-                    state=ComplianceState.COMPLIANT,
-                    confidence=0.96,
-                    reasoning=f"List price resolved: '{price_val}'.",
-                    matched_value=price_val,
-                    evidence=[evidence],
-                )
-
-        # Power draw pattern
-        if any(w in req_lower for w in ("power", "draw", "watt", "watts")):
-            if "typical" in req_lower:
-                m_pow = re.search(r"(?i)(?:typical|nominal)[^\n\.,:]*[:\-\s]+(\d+\s*W)", all_facts_text)
-            elif "max" in req_lower or "maximum" in req_lower or "peak" in req_lower:
-                m_pow = re.search(r"(?i)(?:max|maximum|peak)[^\n\.,:]*[:\-\s]+(\d+\s*W)", all_facts_text)
-            else:
-                m_pow = re.search(r"\b(\d+\s*W)\b", all_facts_text, re.IGNORECASE)
-
-            if m_pow:
-                pow_val = m_pow.group(1).strip()
-                top_page = candidate_facts[0].source_page if candidate_facts else 1
-                evidence = EvidenceItem(
-                    source_page=top_page,
-                    value=pow_val,
-                    confidence=0.96,
-                    extraction_method=self.name,
-                    citation=f"Power Specifications (Page {top_page})",
-                    reasoning=f"Extracted power draw specification: '{pow_val}'.",
-                )
-                return LayerResult(
-                    layer_name=self.name,
-                    state=ComplianceState.COMPLIANT,
-                    confidence=0.96,
-                    reasoning=f"Power draw resolved: '{pow_val}'.",
-                    matched_value=pow_val,
-                    evidence=[evidence],
-                )
-
+        # Defer all complex / semantic matching to the AI reasoning layer
         return None

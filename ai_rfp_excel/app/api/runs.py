@@ -225,7 +225,19 @@ async def execute_pipeline_background(
                             )
                             db.add(doc_page)
 
-                            # Extract bullet points / line specs
+                            # Add whole-page contextual fact
+                            page_overview_fact = FactItem(
+                                field_name=f"Page {page_index} Overview",
+                                value=page_text.strip(),
+                                source_document_id=str(pdf_doc_id),
+                                source_page=page_index,
+                                source_type="text",
+                                confidence=0.90,
+                                extraction_method="pdf_page_context",
+                            )
+                            facts.append(page_overview_fact)
+
+                            # Extract key-value pairs and direct spec lines
                             lines = [ln.strip() for ln in page_text.split("\n") if len(ln.strip()) >= 3]
                             for line in lines:
                                 if ":" in line:
@@ -236,28 +248,29 @@ async def execute_pipeline_background(
                                     f_name = "Technical Specification"
                                     f_val = line
 
-                                fact_item = FactItem(
-                                    field_name=f_name,
-                                    value=f_val,
-                                    source_document_id=str(pdf_doc_id),
-                                    source_page=page_index,
-                                    source_type="text",
-                                    confidence=0.95,
-                                    extraction_method="pdf_ingestion",
-                                )
-                                facts.append(fact_item)
+                                if f_val:
+                                    fact_item = FactItem(
+                                        field_name=f_name,
+                                        value=f_val,
+                                        source_document_id=str(pdf_doc_id),
+                                        source_page=page_index,
+                                        source_type="text",
+                                        confidence=0.95,
+                                        extraction_method="pdf_ingestion",
+                                    )
+                                    facts.append(fact_item)
 
-                                ef = ExtractedFact(
-                                    document_id=pdf_doc_id,
-                                    source_page=page_index,
-                                    field_name=f_name,
-                                    original_value=f_val,
-                                    normalized_value=f_val,
-                                    confidence=0.95,
-                                    extraction_method="pdf_ingestion",
-                                    source_type="text",
-                                )
-                                db.add(ef)
+                                    ef = ExtractedFact(
+                                        document_id=pdf_doc_id,
+                                        source_page=page_index,
+                                        field_name=f_name,
+                                        original_value=f_val,
+                                        normalized_value=f_val,
+                                        confidence=0.95,
+                                        extraction_method="pdf_ingestion",
+                                        source_type="text",
+                                    )
+                                    db.add(ef)
                     await db.commit()
 
         run.progress = 50.0

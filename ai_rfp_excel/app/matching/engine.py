@@ -20,7 +20,7 @@ logger = get_logger("matching.engine")
 
 
 class ComplianceEngine:
-    """Layered Compliance Engine resolving requirements against reference data."""
+    """AI-Native Compliance Engine resolving requirements against reference data."""
 
     def __init__(
         self,
@@ -98,7 +98,6 @@ class ComplianceEngine:
 
         return False, []
 
-
     async def evaluate_requirement(
         self,
         requirement_text: str,
@@ -107,7 +106,7 @@ class ComplianceEngine:
         model_name: str | None = None,
         requirement_id: str | None = None,
     ) -> ComplianceDecision:
-        """Evaluate an RFP requirement through the 5-layer resolution pipeline."""
+        """Evaluate an RFP requirement through AI reasoning and grounded document verification."""
         req_clean = requirement_text.strip()
         if not req_clean or not facts:
             # Hallucination prevention: No facts available -> NOT_FOUND
@@ -139,32 +138,26 @@ class ComplianceEngine:
                 conflicting_evidence=conflict_evidence,
             )
 
-        # Layer 1: Exact Matching
+        # Layer 1: Strict 1:1 Exact Matching (Identical SKU, Part Number, or Field Name)
         res1: LayerResult | None = self.layer1_exact.evaluate(req_clean, facts, vendor_name)
         if res1 and res1.confidence >= self.high_confidence_threshold:
             logger.info("Requirement resolved at Layer 1 (Exact Match)", req=req_clean)
             return self._build_decision(requirement_id, req_clean, vendor_name, res1)
 
-        # Layer 2: Rule-Based / Arithmetic Matching
+        # Layer 2: Strict Arithmetic / Numeric Rule Verification
         res2: LayerResult | None = self.layer2_rules.evaluate(req_clean, facts, vendor_name)
         if res2 and res2.confidence >= self.high_confidence_threshold:
             logger.info("Requirement resolved at Layer 2 (Rule-based)", req=req_clean)
             return self._build_decision(requirement_id, req_clean, vendor_name, res2)
 
-        # Layer 3: Unit Conversion & Normalization
+        # Layer 3: Direct Unit Conversion Check
         res3: LayerResult | None = self.layer3_units.evaluate(req_clean, facts, vendor_name)
         if res3 and res3.confidence >= self.high_confidence_threshold:
             logger.info("Requirement resolved at Layer 3 (Unit Conversion)", req=req_clean)
             return self._build_decision(requirement_id, req_clean, vendor_name, res3)
 
-        # Layer 4: Semantic Keyword Matching
-        res4: LayerResult | None = self.layer4_semantic.evaluate(req_clean, facts, vendor_name)
-        if res4 and res4.confidence >= self.high_confidence_threshold:
-            logger.info("Requirement resolved at Layer 4 (Semantic Match)", req=req_clean)
-            return self._build_decision(requirement_id, req_clean, vendor_name, res4)
-
-        # Layer 5: LLM Reasoning (Complex / Ambiguous)
-        logger.info("Invoking Layer 5 (LLM Reasoning)", req=req_clean)
+        # Primary: Layer 5 AI-Native Reasoning (LLM)
+        logger.info("Invoking AI Reasoning Layer", req=req_clean)
         res5: LayerResult | None = await self.layer5_llm.evaluate(
             requirement_text=req_clean,
             facts=facts,
@@ -172,10 +165,13 @@ class ComplianceEngine:
             model_name=model_name,
         )
         if res5:
+            logger.info("Requirement resolved by AI Reasoning", req=req_clean, status=res5.state)
             return self._build_decision(requirement_id, req_clean, vendor_name, res5)
 
-        # Fallback to Layer 4 if available
+        # Fallback: Layer 4 Semantic Keyword Matching (only if AI is offline or failed)
+        res4: LayerResult | None = self.layer4_semantic.evaluate(req_clean, facts, vendor_name)
         if res4:
+            logger.info("Fallback to Layer 4 (Semantic Match)", req=req_clean)
             return self._build_decision(requirement_id, req_clean, vendor_name, res4)
 
         # If all layers fail to find relevant data: NOT_FOUND

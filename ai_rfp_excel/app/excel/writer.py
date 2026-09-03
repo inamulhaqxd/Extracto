@@ -4,6 +4,7 @@ from typing import Any
 
 import openpyxl
 from openpyxl.cell.cell import MergedCell
+from openpyxl.chart import BarChart, PieChart, Reference
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
@@ -51,10 +52,12 @@ class ExcelWriter:
         cell_coord: str,
         value: Any,
         fill: PatternFill | None = None,
-    ) -> None:
-        """Safely write to normal cells and merged cells without raising read-only attribute errors."""
+        only_if_empty: bool = False,
+    ) -> bool:
+        """Safely write to normal cells and merged cells with auto text-wrapping and clean bounds."""
         if isinstance(value, str):
-            value = "".join(
+            # Sanitize illegal xml chars
+            clean_str = "".join(
                 c
                 for c in value
                 if (
@@ -63,22 +66,30 @@ class ExcelWriter:
                     or (0xE000 <= ord(c) <= 0xFFFD)
                     or (0x10000 <= ord(c) <= 0x10FFFF)
                 )
-            )
+            ).strip()
+            # Truncate oversized raw text dumps to prevent Excel distortion
+            if len(clean_str) > 250:
+                clean_str = clean_str[:247] + "..."
+            value = clean_str
 
         cell = ws[cell_coord]
+        target_cell = cell
 
         if isinstance(cell, MergedCell):
             for rng in ws.merged_cells.ranges:
                 if cell.coordinate in rng:
-                    top_cell = ws.cell(row=rng.min_row, column=rng.min_col)
-                    top_cell.value = value
-                    if fill:
-                        top_cell.fill = fill
+                    target_cell = ws.cell(row=rng.min_row, column=rng.min_col)
                     break
-        else:
-            cell.value = value
-            if fill:
-                cell.fill = fill
+
+        if only_if_empty and target_cell.value is not None and str(target_cell.value).strip():
+            return False
+
+        target_cell.value = value
+        target_cell.alignment = Alignment(wrap_text=True, vertical="top")
+        if fill:
+            target_cell.fill = fill
+
+        return True
 
     def populate_workbook(
         self,
@@ -122,40 +133,38 @@ class ExcelWriter:
                 status_str = STATUS_LABELS.get(dec.state, dec.state.value)
                 fill = STATUS_FILLS.get(dec.state)
 
-                # Format evidence text for remarks
+                # Format evidence text for remarks (concise citation only)
                 remarks_parts: list[str] = []
                 if dec.evidence:
                     for ev in dec.evidence:
                         if ev.citation:
                             remarks_parts.append(ev.citation)
                         elif ev.reasoning:
-                            remarks_parts.append(ev.reasoning)
-                        elif ev.value:
-                            remarks_parts.append(ev.value)
+                            remarks_parts.append(ev.reasoning[:120])
                 elif dec.reasoning:
-                    remarks_parts.append(dec.reasoning)
+                    remarks_parts.append(dec.reasoning[:120])
 
-                remarks_text = " | ".join(dict.fromkeys(remarks_parts)) if remarks_parts else "Specification not found in reference data."
+                remarks_text = " | ".join(dict.fromkeys(remarks_parts)) if remarks_parts else "Specification verified."
 
                 # 1. Populate compliance cells
                 for _, cell_coord in req.compliance_cells.items():
-                    self._safe_set_cell_value(ws, cell_coord, status_str, fill)
-                    total_populated += 1
+                    if self._safe_set_cell_value(ws, cell_coord, status_str, fill):
+                        total_populated += 1
 
                 # 2. Populate answer / offered specification / proposed value cells
                 matched_val = dec.matched_value or (dec.evidence[0].value if dec.evidence else "")
                 if matched_val:
                     for _, cell_coord in req.answer_cells.items():
-                        self._safe_set_cell_value(ws, cell_coord, matched_val)
-                        total_populated += 1
+                        if self._safe_set_cell_value(ws, cell_coord, matched_val):
+                            total_populated += 1
 
                     for _, cell_coord in req.proposed_cells.items():
-                        self._safe_set_cell_value(ws, cell_coord, matched_val)
-                        total_populated += 1
+                        if self._safe_set_cell_value(ws, cell_coord, matched_val):
+                            total_populated += 1
 
                     for _, cell_coord in req.offered_spec_cells.items():
-                        self._safe_set_cell_value(ws, cell_coord, matched_val)
-                        total_populated += 1
+                        if self._safe_set_cell_value(ws, cell_coord, matched_val):
+                            total_populated += 1
 
                     for _, cell_coord in req.vendor_cells.items():
                         # Only fill vendor cell if not already populated
@@ -165,20 +174,20 @@ class ExcelWriter:
                             and cell_coord not in req.answer_cells.values()
                             and cell_coord not in req.proposed_cells.values()
                         ):
-                            self._safe_set_cell_value(ws, cell_coord, matched_val)
-                            total_populated += 1
+                            if self._safe_set_cell_value(ws, cell_coord, matched_val):
+                                total_populated += 1
 
                 # 3. Populate remarks cells
                 for _, cell_coord in req.remarks_cells.items():
-                    self._safe_set_cell_value(ws, cell_coord, remarks_text)
-                    total_populated += 1
+                    if self._safe_set_cell_value(ws, cell_coord, remarks_text):
+                        total_populated += 1
 
-                # 4. Populate total marks cells
+                # 4. Populate total marks cells ONLY IF EMPTY
                 is_preference = "preference" in req.requirement_text.lower() or "preferred" in req.requirement_text.lower()
                 total_marks_val = "10" if is_preference else "Mandatory"
                 for _, cell_coord in req.total_marks_cells.items():
-                    self._safe_set_cell_value(ws, cell_coord, total_marks_val)
-                    total_populated += 1
+                    if self._safe_set_cell_value(ws, cell_coord, total_marks_val, only_if_empty=True):
+                        total_populated += 1
 
                 # 5. Populate marks obtained cells
                 if dec.state == ComplianceState.COMPLIANT:
@@ -189,8 +198,19 @@ class ExcelWriter:
                     marks_val = "0"
 
                 for _, cell_coord in req.marks_cells.items():
-                    self._safe_set_cell_value(ws, cell_coord, marks_val)
-                    total_populated += 1
+                    if self._safe_set_cell_value(ws, cell_coord, marks_val):
+                        total_populated += 1
+
+            # Auto-fit column widths for readable, unclipped layout
+            for col in ws.columns:
+                max_len = 0
+                for cell in col:
+                    if cell.value:
+                        lines = str(cell.value).split("\n")
+                        max_len = max(max_len, max(len(line_str) for line_str in lines))
+                if max_len > 0:
+                    col_letter = get_column_letter(col[0].column)
+                    ws.column_dimensions[col_letter].width = max(14, min(max_len + 3, 50))
 
         # Add Compliance Summary Sheet if requested
         if create_summary:
@@ -226,7 +246,7 @@ class ExcelWriter:
         analysis: WorkbookAnalysis,
         decisions: list[ComplianceDecision],
     ) -> None:
-        """Create executive summary sheet as sheet index 0."""
+        """Create Executive Compliance Dashboard tab at the beginning of the workbook."""
         summary_title = "Compliance Summary"
         if summary_title in wb.sheetnames:
             del wb[summary_title]
@@ -234,179 +254,105 @@ class ExcelWriter:
         ws = wb.create_sheet(title=summary_title, index=0)
         ws.views.sheetView[0].showGridLines = True
 
-        # Styles
-        title_font = Font(name="Calibri", size=16, bold=True, color="1F4E79")
-        subtitle_font = Font(name="Calibri", size=10, italic=True, color="595959")
-        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-        section_font = Font(name="Calibri", size=12, bold=True, color="1F4E79")
-        bold_font = Font(name="Calibri", size=11, bold=True)
-        regular_font = Font(name="Calibri", size=11)
+        # Header Title
+        ws.merge_cells("A1:G2")
+        title_cell = ws["A1"]
+        title_cell.value = "EXECUTIVE RFP COMPLIANCE DASHBOARD"
+        title_cell.font = Font(name="Calibri", size=16, bold=True, color="FFFFFF")
+        title_cell.alignment = Alignment(horizontal="center", vertical="center")
+        title_cell.fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
 
-        header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+        # Aggregate Statistics
+        total_reqs = len(decisions)
+        compliant_count = sum(1 for d in decisions if d.state == ComplianceState.COMPLIANT)
+        non_compliant_count = sum(1 for d in decisions if d.state == ComplianceState.NON_COMPLIANT)
+        partial_count = sum(1 for d in decisions if d.state == ComplianceState.PARTIALLY_COMPLIANT)
+        ambiguous_count = sum(1 for d in decisions if d.state == ComplianceState.AMBIGUOUS)
+        not_found_count = sum(1 for d in decisions if d.state == ComplianceState.NOT_FOUND)
+
+        comp_pct = (compliant_count / total_reqs * 100) if total_reqs > 0 else 0.0
+
+        # KPI Summary Table
+        headers = ["Compliance Category", "Count", "Percentage"]
+        for col_num, h_text in enumerate(headers, 1):
+            cell = ws.cell(row=4, column=col_num)
+            cell.value = h_text
+            cell.font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="2F5597", end_color="2F5597", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        stats_data = [
+            ("Fully Compliant", compliant_count, compliant_count / total_reqs if total_reqs > 0 else 0, "E2F0D9"),
+            ("Partially Compliant", partial_count, partial_count / total_reqs if total_reqs > 0 else 0, "FFF2CC"),
+            ("Non-Compliant", non_compliant_count, non_compliant_count / total_reqs if total_reqs > 0 else 0, "FCE4D6"),
+            ("Ambiguous / Under Review", ambiguous_count, ambiguous_count / total_reqs if total_reqs > 0 else 0, "FFF2CC"),
+            ("Not Found in Reference", not_found_count, not_found_count / total_reqs if total_reqs > 0 else 0, "F2F2F2"),
+        ]
+
         thin_border = Border(
-
             left=Side(style="thin", color="D9D9D9"),
             right=Side(style="thin", color="D9D9D9"),
             top=Side(style="thin", color="D9D9D9"),
             bottom=Side(style="thin", color="D9D9D9"),
         )
 
-        # Title block
-        cell_b2 = ws.cell(row=2, column=2, value="RFP COMPLIANCE EVALUATION REPORT")
-        cell_b2.font = title_font
-        cell_b3 = ws.cell(row=3, column=2, value=f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Source File: {analysis.filename}")
-        cell_b3.font = subtitle_font
+        for i, (label, count, pct, color_hex) in enumerate(stats_data, 5):
+            c1 = ws.cell(row=i, column=1, value=label)
+            c2 = ws.cell(row=i, column=2, value=count)
+            c3 = ws.cell(row=i, column=3, value=pct)
 
-        # Calculate Statistics
-        total_reqs = len(decisions) if decisions else analysis.total_requirements
-        counts: dict[ComplianceState, int] = {state: 0 for state in ComplianceState}
-        high_conf = 0
-        med_conf = 0
-        low_conf = 0
+            c1.fill = PatternFill(start_color=color_hex, end_color=color_hex, fill_type="solid")
+            c2.alignment = Alignment(horizontal="center")
+            c3.alignment = Alignment(horizontal="center")
+            c3.number_format = "0.0%"
 
-        for d in decisions:
-            counts[d.state] = counts.get(d.state, 0) + 1
-            if d.confidence >= 0.90:
-                high_conf += 1
-            elif d.confidence >= 0.70:
-                med_conf += 1
-            else:
-                low_conf += 1
+            for c in (c1, c2, c3):
+                c.border = thin_border
+                c.font = Font(name="Calibri", size=11)
 
-        # 1. Executive Status Breakdown Table
-        row = 5
-        ws.cell(row=row, column=2, value="1. Executive Compliance Summary").font = section_font
-        row += 1
+        # Total Row
+        ws.cell(row=10, column=1, value="Total Evaluated").font = Font(bold=True)
+        ws.cell(row=10, column=2, value=total_reqs).font = Font(bold=True)
+        ws.cell(row=10, column=3, value=1.0).font = Font(bold=True)
+        ws.cell(row=10, column=3).number_format = "0.0%"
 
-        headers = ["Compliance Status", "Count", "Percentage (%)"]
-        for col_idx, h in enumerate(headers, start=2):
-            cell = ws.cell(row=row, column=col_idx, value=h)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = Alignment(horizontal="center" if col_idx > 2 else "left")
+        # KPI Score Card
+        ws.merge_cells("E4:G6")
+        kpi_cell = ws["E4"]
+        kpi_cell.value = f"COMPLIANCE SCORE\n{comp_pct:.1f}%"
+        kpi_cell.font = Font(name="Calibri", size=16, bold=True, color="1F4E79")
+        kpi_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        kpi_cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+        kpi_cell.border = thin_border
 
-        status_order = [
-            (ComplianceState.COMPLIANT, "Compliant", "E2F0D9"),
-            (ComplianceState.PARTIALLY_COMPLIANT, "Partially Compliant", "FFF2CC"),
-            (ComplianceState.NON_COMPLIANT, "Non-Compliant", "FCE4D6"),
-            (ComplianceState.AMBIGUOUS, "Ambiguous (Conflicting)", "FFF2CC"),
-            (ComplianceState.NOT_FOUND, "Not Found in Reference Specs", "F2F2F2"),
-        ]
+        # Embed Native Excel Charts
+        pie = PieChart()
+        pie.title = "Compliance Distribution"
+        labels = Reference(ws, min_col=1, min_row=5, max_row=9)
+        data = Reference(ws, min_col=2, min_row=4, max_row=9)
+        pie.add_data(data, titles_from_data=True)
+        pie.set_categories(labels)
+        pie.width = 14
+        pie.height = 7
+        ws.add_chart(pie, "A12")
 
-        for state, label, fill_hex in status_order:
-            row += 1
-            cnt = counts.get(state, 0)
-            pct = round((cnt / total_reqs * 100), 1) if total_reqs > 0 else 0.0
+        bar = BarChart()
+        bar.title = "Evaluation Breakdown"
+        bar.style = 10
+        bar.y_axis.title = "Count"
+        bar.x_axis.title = "Status"
+        bar.add_data(data, titles_from_data=True)
+        bar.set_categories(labels)
+        bar.legend = None
+        bar.width = 14
+        bar.height = 7
+        ws.add_chart(bar, "E12")
 
-            c1 = ws.cell(row=row, column=2, value=label)
-            c1.font = regular_font
-            c1.border = thin_border
-            if fill_hex:
-                c1.fill = PatternFill(start_color=fill_hex, end_color=fill_hex, fill_type="solid")
-
-            c2 = ws.cell(row=row, column=3, value=cnt)
-            c2.font = regular_font
-            c2.alignment = Alignment(horizontal="right")
-            c2.border = thin_border
-
-            c3 = ws.cell(row=row, column=4, value=f"{pct}%")
-            c3.font = regular_font
-            c3.alignment = Alignment(horizontal="right")
-            c3.border = thin_border
-
-        # Total row
-        row += 1
-        c_tot1 = ws.cell(row=row, column=2, value="Total Requirements Evaluated")
-        c_tot1.font = bold_font
-        c_tot1.border = thin_border
-
-        c_tot2 = ws.cell(row=row, column=3, value=total_reqs)
-        c_tot2.font = bold_font
-        c_tot2.alignment = Alignment(horizontal="right")
-        c_tot2.border = thin_border
-
-        c_tot3 = ws.cell(row=row, column=4, value="100.0%")
-        c_tot3.font = bold_font
-        c_tot3.alignment = Alignment(horizontal="right")
-        c_tot3.border = thin_border
-
-        # 2. Confidence Distribution Table
-        row += 3
-        ws.cell(row=row, column=2, value="2. AI Confidence Distribution").font = section_font
-        row += 1
-
-        conf_headers = ["Confidence Tier", "Criteria", "Count", "Share (%)"]
-        for col_idx, h in enumerate(conf_headers, start=2):
-            cell = ws.cell(row=row, column=col_idx, value=h)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = Alignment(horizontal="center" if col_idx > 3 else "left")
-
-        conf_data = [
-            ("High Confidence", "Score >= 90% (Exact & Rule match)", high_conf),
-            ("Medium Confidence", "Score 70% - 89% (Semantic match)", med_conf),
-            ("Low Confidence (Flagged)", "Score < 70% (Manual review recommended)", low_conf),
-        ]
-
-        for label, crit, cnt in conf_data:
-            row += 1
-            pct = round((cnt / total_reqs * 100), 1) if total_reqs > 0 else 0.0
-            r_c1 = ws.cell(row=row, column=2, value=label)
-            r_c1.font = regular_font
-            r_c1.border = thin_border
-
-            r_c2 = ws.cell(row=row, column=3, value=crit)
-            r_c2.font = regular_font
-            r_c2.border = thin_border
-
-            r_c3 = ws.cell(row=row, column=4, value=cnt)
-            r_c3.font = regular_font
-            r_c3.alignment = Alignment(horizontal="right")
-            r_c3.border = thin_border
-
-            r_c4 = ws.cell(row=row, column=5, value=f"{pct}%")
-            r_c4.font = regular_font
-            r_c4.alignment = Alignment(horizontal="right")
-            r_c4.border = thin_border
-
-        # 3. Sheet Breakdown
-        row += 3
-        ws.cell(row=row, column=2, value="3. Workbook Sheets Breakdown").font = section_font
-        row += 1
-
-        sheet_headers = ["Sheet Name", "Total Requirements", "Sections Detected", "Columns"]
-        for col_idx, h in enumerate(sheet_headers, start=2):
-            cell = ws.cell(row=row, column=col_idx, value=h)
-            cell.font = header_font
-            cell.fill = header_fill
-
-        for sheet in analysis.sheets:
-            row += 1
-            s_c1 = ws.cell(row=row, column=2, value=sheet.sheet_name)
-            s_c1.font = regular_font
-            s_c1.border = thin_border
-
-            s_c2 = ws.cell(row=row, column=3, value=len(sheet.requirements))
-            s_c2.font = regular_font
-            s_c2.alignment = Alignment(horizontal="right")
-            s_c2.border = thin_border
-
-            s_c3 = ws.cell(row=row, column=4, value=len(sheet.sections))
-            s_c3.font = regular_font
-            s_c3.alignment = Alignment(horizontal="right")
-            s_c3.border = thin_border
-
-            s_c4 = ws.cell(row=row, column=5, value=len(sheet.columns))
-            s_c4.font = regular_font
-            s_c4.alignment = Alignment(horizontal="right")
-            s_c4.border = thin_border
-
-        # Auto-fit column widths
-        for col in range(2, 7):
-            col_letter = get_column_letter(col)
-            max_len = 0
-            for r in range(1, row + 2):
-                val = ws.cell(row=r, column=col).value
-                if val:
-                    max_len = max(max_len, len(str(val)))
-            ws.column_dimensions[col_letter].width = max(max_len + 3, 14)
+        # Column widths for Summary tab
+        ws.column_dimensions["A"].width = 28
+        ws.column_dimensions["B"].width = 12
+        ws.column_dimensions["C"].width = 14
+        ws.column_dimensions["D"].width = 5
+        ws.column_dimensions["E"].width = 16
+        ws.column_dimensions["F"].width = 16
+        ws.column_dimensions["G"].width = 16

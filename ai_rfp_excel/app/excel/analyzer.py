@@ -250,6 +250,12 @@ class ExcelAnalyzer:
             sheet_index=sheet_index,
         )
 
+        # If a sheet has NO empty slots across all requirements, it is informational / read-only BOQ
+        has_any_empty_slots = any(bool(r.empty_slots) for r in requirements)
+        if not has_any_empty_slots:
+            requirements = []
+            sections = []
+
         return SheetAnalysis(
             sheet_name=sheet_name,
             sheet_index=sheet_index,

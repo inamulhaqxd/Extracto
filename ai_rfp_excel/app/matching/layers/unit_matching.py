@@ -12,7 +12,10 @@ from ai_rfp_excel.app.matching.models import (
 
 
 class UnitConversionLayer:
-    """Layer 3: Unit conversion & normalization (e.g., 64GB = 64 GB = 64 gigabytes)."""
+    """Layer 3: Strict Unit conversion & normalization (e.g., 64GB = 64 GB = 64 gigabytes).
+
+    Only executes when both requirement and fact contain explicit numeric units that normalize to equality.
+    """
 
     name = "unit_conversion"
 
@@ -22,9 +25,15 @@ class UnitConversionLayer:
         facts: list[FactItem],
         vendor_name: str | None = None,
     ) -> LayerResult | None:
-        req_norm = normalize_unit_string(requirement_text).lower()
         if not facts:
             return None
+
+        # Only evaluate if the requirement actually contains a numeric unit
+        req_parsed = parse_numeric_with_unit(requirement_text)
+        if not req_parsed:
+            return None
+
+        req_norm = normalize_unit_string(requirement_text).lower()
 
         candidate_facts = facts
         if vendor_name:
@@ -38,15 +47,27 @@ class UnitConversionLayer:
             if filtered:
                 candidate_facts = filtered
 
-        req_parsed = parse_numeric_with_unit(requirement_text)
+        num_req, unit_req, _ = req_parsed
+        req_token = f"{num_req}{unit_req}"
 
         for fact in candidate_facts:
-            fact_norm = normalize_unit_string(fact.value).lower()
-            if not fact_norm:
+            # Skip multi-line paragraphs or page overviews
+            if "\n" in fact.value or len(fact.value) > 120:
                 continue
 
-            # Check if normalized fact matches normalized requirement exactly or as substring
-            if fact_norm in req_norm or req_norm in fact_norm:
+            fact_parsed = parse_numeric_with_unit(fact.value)
+            if not fact_parsed:
+                continue
+
+            fact_norm = normalize_unit_string(fact.value).lower()
+
+            # Strict equality of unit strings or arithmetic quantity equality
+            is_unit_match = (
+                (bool(fact_norm) and bool(req_norm) and fact_norm == req_norm)
+                or (compare_quantities(fact.value, req_token, operator="=") is True)
+            )
+
+            if is_unit_match:
                 citation_ref = f"Page {fact.source_page}" if fact.source_page else "Document reference"
                 if fact.source_table_id:
                     citation_ref += f", Table {fact.source_table_id}"
@@ -73,36 +94,4 @@ class UnitConversionLayer:
                     evidence=[evidence],
                 )
 
-            # Check quantity comparison equality if both have units
-            if req_parsed:
-                num_req, unit_req, _ = req_parsed
-                req_token = f"{num_req}{unit_req}"
-                if compare_quantities(fact.value, req_token, operator="=") is True:
-                    citation_ref = f"Page {fact.source_page}" if fact.source_page else "Document reference"
-                    if fact.source_table_id:
-                        citation_ref += f", Table {fact.source_table_id}"
-
-                    evidence = EvidenceItem(
-                        source_document_id=fact.source_document_id,
-                        source_page=fact.source_page,
-                        source_table_id=fact.source_table_id,
-                        source_image_id=fact.source_image_id,
-                        source_type=fact.source_type,
-                        value=fact.value,
-                        confidence=0.94,
-                        extraction_method=self.name,
-                        citation=citation_ref,
-                        reasoning=f"Unit normalization matched quantity in '{fact.value}' with '{requirement_text}'.",
-                    )
-
-                    return LayerResult(
-                        layer_name=self.name,
-                        state=ComplianceState.COMPLIANT,
-                        confidence=0.94,
-                        reasoning=f"Specification '{fact.value}' matches requirement through unit normalization.",
-                        matched_value=fact.value,
-                        evidence=[evidence],
-                    )
-
         return None
-

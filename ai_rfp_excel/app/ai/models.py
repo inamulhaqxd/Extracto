@@ -75,6 +75,15 @@ AVAILABLE_MODELS: list[ModelInfo] = [
         is_default=False,
     ),
     ModelInfo(
+        id="qwen2.5-1.5b",
+        name="Qwen 2.5 1.5B",
+        tag="qwen2.5:1.5b",
+        label="Qwen 2.5 1.5B — 980MB RAM, 128K context",
+        ram_usage="980MB",
+        context_length="128K",
+        is_default=False,
+    ),
+    ModelInfo(
         id="llama3.2-3b",
         name="Llama 3.2 3B",
         tag="llama3.2:3b",
@@ -83,7 +92,6 @@ AVAILABLE_MODELS: list[ModelInfo] = [
         context_length="128K",
         is_default=False,
     ),
-
 ]
 
 
@@ -114,6 +122,8 @@ class ComplianceStatus(str, Enum):
     NON_COMPLIANT = "NON_COMPLIANT"
     PARTIAL = "PARTIAL"
     AMBIGUOUS = "AMBIGUOUS"
+    NOT_SPECIFIED = "NOT SPECIFIED"
+    NOT_APPLICABLE = "NOT APPLICABLE"
 
 
 class ComplianceAnalysisResult(BaseModel):

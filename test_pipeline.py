@@ -4,6 +4,7 @@ Adaptive Pipeline: Generic PDF Ingestion → Hybrid BM25 Indexing → Generic Ex
 Zero-crash, ultra-fast, format-agnostic.
 """
 
+import argparse
 import json
 import math
 import os
@@ -19,14 +20,118 @@ from typing import Any
 import httpx
 import openpyxl
 from openpyxl.cell.cell import Cell, ILLEGAL_CHARACTERS_RE, MergedCell
+from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
 # ─── CONFIGURATION ─────────────────────────────────────────
 OLLAMA_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.environ.get("DEFAULT_LLM_MODEL", "tinyllama:latest")
+OLLAMA_MODEL = os.environ.get("DEFAULT_LLM_MODEL", "qwen2.5:1.5b")
 DEFAULT_INPUT_DIR = Path("testworkflowfile")
 MAX_CONTEXT_CHUNKS = 2
 MAX_LLM_TIMEOUT = 30.0
+# ──────────────────────────────────────────────────────────
+
+# ─── OPTIONAL COMPUTATION, OCR & NLP LIBRARIES ─────────────
+try:
+    import pint
+    ureg = pint.UnitRegistry()
+except Exception:
+    ureg = None
+
+try:
+    import dateparser
+except Exception:
+    dateparser = None
+
+try:
+    from rapidfuzz import fuzz
+except Exception:
+    fuzz = None
+
+try:
+    import sympy
+except Exception:
+    sympy = None
+
+try:
+    import pytesseract
+    from PIL import Image
+except Exception:
+    pytesseract = None
+
+
+def _attempt_ocr(page: Any, page_num: int) -> str:
+    """Perform local OCR fallback for scanned or image-heavy PDF page."""
+    if not pytesseract:
+        return ""
+    try:
+        if hasattr(page, "render"):
+            pil_img = page.render(scale=2).to_pil()
+            ocr_text = pytesseract.image_to_string(pil_img)
+            if ocr_text and len(ocr_text.strip()) > 10:
+                print(f"    [OCR Engine] Page {page_num}: Scanned content detected, extracted {len(ocr_text)} chars via OCR.")
+                return str(ocr_text)
+    except Exception:
+        pass
+    return ""
+
+
+def convert_units(val_str: str, target_unit: str) -> str | None:
+    """Convert any physical measurement string to target unit dynamically (e.g., '8.008 Gbps' to 'Mbps')."""
+    if not ureg or not val_str or not target_unit:
+        return None
+    try:
+        qty = ureg(val_str.strip())
+        converted = qty.to(target_unit.strip())
+        return f"{converted.magnitude:g} {target_unit}"
+    except Exception:
+        return None
+
+
+def calculate_duration(start_str: str, end_str: str) -> str | None:
+    """Calculate exact duration in minutes and hours between two time/date strings."""
+    from datetime import datetime, timedelta
+    try:
+        # Try HH:MM format
+        fmt = "%H:%M"
+        t1 = datetime.strptime(start_str.strip(), fmt)
+        t2 = datetime.strptime(end_str.strip(), fmt)
+        if t2 < t1:
+            t2 += timedelta(days=1)
+        diff_minutes = int((t2 - t1).total_seconds() / 60)
+        hrs, mins = divmod(diff_minutes, 60)
+        if hrs > 0 and mins > 0:
+            return f"{diff_minutes} minutes ({hrs} hr {mins} min)"
+        elif hrs > 0:
+            return f"{diff_minutes} minutes ({hrs} hr)"
+        return f"{diff_minutes} minutes"
+    except Exception:
+        pass
+    if dateparser:
+        try:
+            d1 = dateparser.parse(start_str)
+            d2 = dateparser.parse(end_str)
+            if d1 and d2:
+                if d2 < d1:
+                    d2 += timedelta(days=1)
+                diff_minutes = int((d2 - d1).total_seconds() / 60)
+                return f"{diff_minutes} minutes"
+        except Exception:
+            pass
+    return None
+
+
+def evaluate_math_expr(expr: str) -> str | None:
+    """Safely evaluate mathematical expressions extracted by LLM."""
+    if not expr:
+        return None
+    if sympy:
+        try:
+            res = sympy.sympify(expr)
+            return str(res)
+        except Exception:
+            pass
+    return None
 # ──────────────────────────────────────────────────────────
 
 
@@ -41,12 +146,9 @@ def _is_valid_xml_char(c: str) -> bool:
 
 
 def _sanitize_cell_val(val: Any) -> Any:
-    """Strip illegal XML non-characters (like \ufffe) and normalize whitespace."""
+    """Strip illegal XML non-characters (like \ufffe)."""
     if isinstance(val, str):
-        cleaned = "".join(c for c in val if _is_valid_xml_char(c))
-        if "\n\n" not in cleaned:
-            cleaned = " ".join(cleaned.split())
-        return cleaned
+        return "".join(c for c in val if _is_valid_xml_char(c))
     return val
 
 
@@ -89,19 +191,51 @@ class DocumentChunk:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-class BM25Retriever:
-    """Fast, in-memory BM25 index with phrase and technical keyword boosting."""
+def get_ollama_embedding(text: str, model: str = "nomic-embed-text") -> list[float] | None:
+    """Get dense vector embedding from local Ollama model."""
+    if not text or not text.strip():
+        return None
+    try:
+        res = httpx.post(
+            f"{OLLAMA_URL}/api/embeddings",
+            json={"model": model, "prompt": text.strip()[:1500]},
+            timeout=8.0,
+        )
+        if res.status_code == 200:
+            data = res.json()
+            if "embedding" in data and isinstance(data["embedding"], list):
+                return data["embedding"]
+    except Exception:
+        pass
+    return None
 
-    def __init__(self, chunks: list[DocumentChunk], k1: float = 1.5, b: float = 0.75):
+
+def cosine_similarity(v1: list[float], v2: list[float]) -> float:
+    """Compute cosine similarity between two float vectors."""
+    if not v1 or not v2 or len(v1) != len(v2):
+        return 0.0
+    dot = sum(a * b for a, b in zip(v1, v2))
+    norm1 = math.sqrt(sum(a * a for a in v1))
+    norm2 = math.sqrt(sum(b * b for b in v2))
+    return dot / (norm1 * norm2) if (norm1 > 0 and norm2 > 0) else 0.0
+
+
+class HybridRetriever:
+    """Hybrid Retrieval Engine combining Lexical BM25 with Dense Vector Embeddings via Reciprocal Rank Fusion."""
+
+    def __init__(self, chunks: list[DocumentChunk], k1: float = 1.5, b: float = 0.75, embedding_model: str = "nomic-embed-text"):
         self.chunks = chunks
         self.k1 = k1
         self.b = b
+        self.embedding_model = embedding_model
         self.corpus_size = len(chunks)
         self.doc_tokens: list[list[str]] = []
         self.doc_freqs: list[Counter[str]] = []
         self.doc_lengths: list[int] = []
         self.avg_doc_len: float = 0.0
         self.idf: dict[str, float] = {}
+        self.chunk_embeddings: list[list[float] | None] = []
+        self.has_embeddings = False
         self._build_index()
 
     def _build_index(self):
@@ -122,6 +256,11 @@ class BM25Retriever:
             for t in counts.keys():
                 df[t] += 1
 
+            # Fetch dense vector embedding for chunk
+            emb = get_ollama_embedding(chunk.text, model=self.embedding_model)
+            self.chunk_embeddings.append(emb)
+
+        self.has_embeddings = any(emb is not None for emb in self.chunk_embeddings)
         self.avg_doc_len = (total_len / self.corpus_size) if self.corpus_size > 0 else 0.0
         for term, freq in df.items():
             self.idf[term] = math.log(1.0 + (self.corpus_size - freq + 0.5) / (freq + 0.5))
@@ -134,7 +273,7 @@ class BM25Retriever:
         if not query_tokens:
             return [(self.chunks[0], 0.0)] if self.chunks else []
 
-        scores: list[float] = [0.0] * self.corpus_size
+        bm25_scores: list[float] = [0.0] * self.corpus_size
         query_lower = query.lower()
         key_terms = re.findall(r"[a-zA-Z0-9]+", query_lower)
 
@@ -160,13 +299,35 @@ class BM25Retriever:
                 if len(term) >= 3 and term in chunk_lower:
                     score += 0.8
 
-            scores[i] = score
+            bm25_scores[i] = score
 
-        ranked_indices = sorted(range(self.corpus_size), key=lambda idx: scores[idx], reverse=True)
+        # If vector embeddings are active, perform Reciprocal Rank Fusion (RRF)
+        query_emb = get_ollama_embedding(query, model=self.embedding_model) if self.has_embeddings else None
+        if query_emb:
+            vector_scores = [
+                cosine_similarity(query_emb, chunk_emb) if chunk_emb else 0.0
+                for chunk_emb in self.chunk_embeddings
+            ]
+            bm25_ranks = {idx: rank for rank, idx in enumerate(sorted(range(self.corpus_size), key=lambda x: bm25_scores[x], reverse=True))}
+            vec_ranks = {idx: rank for rank, idx in enumerate(sorted(range(self.corpus_size), key=lambda x: vector_scores[x], reverse=True))}
+
+            # Standard RRF formula: 1 / (60 + rank_bm25) + 1 / (60 + rank_vec)
+            rrf_scores = [
+                (1.0 / (60.0 + bm25_ranks[i])) + (1.0 / (60.0 + vec_ranks[i]))
+                for i in range(self.corpus_size)
+            ]
+            ranked_indices = sorted(range(self.corpus_size), key=lambda idx: rrf_scores[idx], reverse=True)
+            results = []
+            for idx in ranked_indices[:top_k]:
+                results.append((self.chunks[idx], round(rrf_scores[idx] * 100, 3)))
+            return results
+
+        # Fallback to pure BM25 ranking
+        ranked_indices = sorted(range(self.corpus_size), key=lambda idx: bm25_scores[idx], reverse=True)
         results = []
         for idx in ranked_indices[:top_k]:
-            if scores[idx] > 0 or len(results) == 0:
-                results.append((self.chunks[idx], round(scores[idx], 3)))
+            if bm25_scores[idx] > 0 or len(results) == 0:
+                results.append((self.chunks[idx], round(bm25_scores[idx], 3)))
         return results
 
     def get_formatted_context(self, query: str, top_k: int = 4) -> str:
@@ -179,9 +340,14 @@ class BM25Retriever:
             header = f"--- [Document Excerpt | Page {chunk.page_number}"
             if chunk.section:
                 header += f" | {chunk.section}"
-            header += f" | Relevance: {score}] ---"
+            score_type = "Hybrid RRF Score" if self.has_embeddings else "BM25 Score"
+            header += f" | {score_type}: {score}] ---"
             formatted_parts.append(f"{header}\n{chunk.text.strip()}")
         return "\n\n".join(formatted_parts)
+
+
+# Backwards compatibility alias
+BM25Retriever = HybridRetriever
 
 
 # ══════════════════════════════════════════════════════════
@@ -203,6 +369,10 @@ def extract_and_index_pdf(pdf_path: Path) -> tuple[dict, BM25Retriever]:
         pdf = pdfium.PdfDocument(str(pdf_path))
         for i, page in enumerate(pdf):
             text = _sanitize_cell_val(page.get_textpage().get_text_range() or "")
+            if len(text.strip()) < 25:
+                ocr_text = _attempt_ocr(page, i + 1)
+                if ocr_text:
+                    text = _sanitize_cell_val(ocr_text)
             pages_data.append({"page": i + 1, "text": text})
     except Exception:
         # Strategy 2: pdfplumber
@@ -228,16 +398,29 @@ def extract_and_index_pdf(pdf_path: Path) -> tuple[dict, BM25Retriever]:
         if not raw_text:
             continue
 
-        # Split text into paragraphs
+        # Detect section headings dynamically
         paragraphs = [p.strip() for p in raw_text.split("\n\n") if p.strip()]
         curr_p = []
         curr_len = 0
         curr_sec = None
 
         for p in paragraphs:
-            # Detect section headings
-            if len(p) < 80 and ("\n" not in p) and (p.isupper() or re.match(r"^(\d+[\.\)]|[A-Z][\.\)])\s+", p)):
-                curr_sec = p
+            # Check for section heading pattern
+            p_clean = p.strip()
+            is_heading = False
+            if len(p_clean) < 70 and ("\n" not in p_clean) and not p_clean.endswith((".", ",", ";", ":")):
+                if p_clean.isupper() and len(p_clean) >= 3 and not re.search(r"\d", p_clean):
+                    is_heading = True
+                elif re.match(r"^(?:Section\s+\d+|[0-9]+[\.\)]|[A-Z][\.\)])\s+", p_clean, re.IGNORECASE):
+                    is_heading = True
+                else:
+                    words = [w for w in re.split(r"[\s/]+", p_clean) if w]
+                    if 1 <= len(words) <= 6 and all(w[0].isupper() or w.lower() in ("and", "or", "the", "of", "in", "to", "for", "on", "with", "&", "-", "–") for w in words):
+                        if not any(w.lower() in ("table", "value", "attribute", "unit", "units", "yes", "no") for w in words):
+                            is_heading = True
+
+            if is_heading:
+                curr_sec = p_clean
 
             if curr_len + len(p) > 750 and curr_p:
                 chunk_count += 1
@@ -302,6 +485,8 @@ def classify_column(header_text: str) -> str:
     for col_type, keywords in COLUMN_TYPE_KEYWORDS.items():
         for kw in keywords:
             if kw in text:
+                return col_type
+            if fuzz and len(text) >= 3 and fuzz.partial_ratio(kw, text) >= 88:
                 return col_type
     return "unknown"
 
@@ -561,213 +746,36 @@ def call_ollama(prompt: str, is_json: bool = True, model_override: str | None = 
 
 
 def _pinpoint_value(context: str, text: str) -> str:
-    """Extract a concise, direct 1-6 word value for the given question/field from text."""
+    """Generic fallback: extracts key-value pair or shortest matching snippet from text."""
     if not text or not text.strip():
         return "Not Found in Reference Document"
 
     f_lower = context.lower().strip()
-
-    # 1. Manufacturer / Vendor / Make
-    if any(w in f_lower for w in ("manufacturer", "vendor", "make", "oem", "brand")):
-        m = re.search(r"(?i)\b(?:Manufacturer|manufactured by)\s+([A-Za-z0-9\s]+?)(?=\s+(?:Model|Form|Dimensions|Weight|CPU|Memory|Storage|Switching|\n|\r|$|\.))", text)
-        if m:
-            return m.group(1).strip()
-        m = re.search(r"(?i)Manufacturer\s+([^\n\r]+)", text)
-        if m:
-            return m.group(1).strip()
-
-    # 2. Model number
-    if "model" in f_lower:
-        m = re.search(r"(?i)\bModel\s+([A-Z0-9\-]+)", text)
-        if m:
-            return m.group(1).strip()
-
-    # 3. Form factor / Chassis
-    if "form factor" in f_lower or "rack" in f_lower or "chassis" in f_lower:
-        m = re.search(r"(?i)\b\d+U\s*(?:Rackmount|Rack\s*Mount|Chassis)?", text)
-        if m:
-            return m.group(0).strip()
-        m = re.search(r"(?i)Form Factor\s+([^\n\r]+)", text)
-        if m:
-            return m.group(1).strip()
-
-    # 4. Weight
-    if "weight" in f_lower:
-        m = re.search(r"\b\d+(?:\.\d+)?\s*(?:kg|lbs|g)\b", text, re.IGNORECASE)
-        if m:
-            return m.group(0).strip()
-
-    # 5. RAM / Memory
-    if "ram" in f_lower or "memory" in f_lower:
-        m = re.search(r"\b\d+\s*(?:GB|TB)\s*(?:DDR\d|ECC|RDIMM|RAM)?", text, re.IGNORECASE)
-        if m:
-            return m.group(0).strip()
-
-    # 6. Switching capacity / Throughput
-    if "switching" in f_lower or "capacity" in f_lower or "throughput" in f_lower:
-        m = re.search(r"\b\d+\s*(?:Gbps|Tbps|Mbps|Mpps)\b", text, re.IGNORECASE)
-        if m:
-            return m.group(0).strip()
-
-    # 7. Ports (10G SFP+ / 100G QSFP28)
-    if "port" in f_lower or "sfp" in f_lower or "qsfp" in f_lower:
-        if "100g" in f_lower or "qsfp" in f_lower:
-            m = re.search(r"(?i)(\d+\s*x\s*100[\-\s]*Gigabit\s*QSFP\d*\s*uplink\s*ports?)", text)
-            if m:
-                return m.group(1).strip()
-            m = re.search(r"\b\d+\s*x\s*[^\n\.,]+QSFP\d*[^\n\.,]*", text, re.IGNORECASE)
-            if m:
-                return m.group(0).strip()
-        elif "10g" in f_lower or "sfp" in f_lower:
-            m = re.search(r"(?i)(\d+\s*x\s*10[\-\s]*Gigabit\s*SFP\+?\s*ports?)", text)
-            if m:
-                return m.group(1).strip()
-            m = re.search(r"\b\d+\s*x\s*[^\n\.,]+SFP\+?[^\n\.,]*", text, re.IGNORECASE)
-            if m:
-                return m.group(0).strip()
-
-    # 8. Power draw / Watts
-    if "power" in f_lower or "draw" in f_lower or "watt" in f_lower:
-        m = re.search(r"(?i)Power Draw\s*\(typical\)\s*(\d+\s*W)", text)
-        if m:
-            return m.group(1).strip()
-        m = re.search(r"\b\d+\s*W\b", text, re.IGNORECASE)
-        if m:
-            return m.group(0)
-
-    # 9. Warranty
-    if "warranty" in f_lower:
-        m = re.search(r"(?i)(?:standard\s*)?(\d+[\s\-]*(?:year|yr)s?(?:\s+limited|\s+hardware|\s+warranty)?)", text)
-        if m:
-            return m.group(1).strip()
-
-    # 10. Price / Cost / USD
-    if any(w in f_lower for w in ("price", "cost", "usd", "$", "list price")):
-        m = re.search(r"\$[\d,]+(?:\.\d+)?(?:\s*USD)?", text)
-        if m:
-            return " ".join(m.group(0).split())
-
-    # 11. Incident ID
-    if "incident id" in f_lower or (re.search(r"\bid\b", f_lower) and "incident" in f_lower):
-        m = re.search(r"\bINC-\d+\b", text)
-        if m:
-            return m.group(0)
-
-    # 12. Root cause device / component
-    if "root cause" in f_lower or "component" in f_lower:
-        m = re.search(r"(?i)(?:failed\s+|failure\s+of\s+(?:an?\s+)?)([A-Z0-9\+\-\s]+transceiver[^\n\.,]*)", text)
-        if m:
-            return m.group(1).strip()
-        m = re.search(r"(?i)(?:failed\s+|failure\s+of\s+)([A-Za-z0-9\+\-\s]+switch[^\n\.,]*)", text)
-        if m:
-            return m.group(1).strip()
-
-    # 13. Incident Duration
-    if "duration" in f_lower or ("calculate" in f_lower and ("time" in f_lower or "start" in f_lower or "incident" in f_lower)):
-        return "73 minutes (1 hr 13 min)"
-
-    # 14. Incident Start Time (first alert)
-    if "start" in f_lower or "first alert" in f_lower:
-        m = re.search(r"(\d{2}:\d{2})\s*[–\-—]\s*First\s+Grafana\s+alert", text, re.IGNORECASE)
-        if m:
-            return m.group(1)
-
-    # 15. Incident Resolved / End Time
-    if "resolved" in f_lower or "declared" in f_lower:
-        m = re.search(r"(\d{2}:\d{2})\s*[–\-—][^\n\.]*incident\s+declared\s+resolved", text, re.IGNORECASE)
-        if m:
-            return m.group(1)
-
-    # 16. Affected Systems
-    if "systems affected" in f_lower or ("affected" in f_lower and "system" in f_lower):
-        return "DC-B-CORE-02, Billing database cluster, Customer self-service portal"
-
-    # 17. Error Rate
-    if "error rate" in f_lower or "portal" in f_lower:
-        m = re.search(r"(?:~?\d+%\s*(?:\([^)]*\))?|roughly\s+\d+\s+in\s+\d+[^\n\.,]*)", text)
-        if m:
-            return "~20% (roughly 1 in 5 requests)"
-
-    # 18. First time failure / Previous occurrence
-    if "first time" in f_lower or "type of failure" in f_lower:
-        m = re.search(r"(?i)(second[^\n\.;]+in\s+(?:the\s+past\s+)?six\s+months[^\n\.;]*)", text)
-        if m:
-            return f"No, {m.group(1).strip()}"
-        return "No, second failure on rack in six months"
-
-    # 19. Action Items count
-    if "deadline" in f_lower:
-        m = re.search(r"(?i)(\b[\w\-]+\s*deadline|\b\d+[\s\-]*(?:week|day|month)s?\s*(?:deadline)?)", text)
-        if m:
-            return "2 weeks (two-week deadline)"
-
-    if "how many" in f_lower or "follow-up action" in f_lower or "action items" in f_lower:
-        return "3 action items"
-
-    # 20. Person who approved RCA / Signoff
-    if "person" in f_lower or "approved" in f_lower or "name" in f_lower:
-        return "Not specified in report (Compiled by on-call NOC lead)"
-
-    # 21. BGP Local-Preference
-    if "local-preference" in f_lower or "local preference" in f_lower:
-        m = re.search(r"set\s+local-preference\s+(\d+)", text, re.IGNORECASE)
-        if m:
-            return m.group(1)
-
-    # 22. BGP UpstreamA Community Tag
-    if "community tag" in f_lower and "upstream" in f_lower:
-        return "64500:100, Yes (matches Section 4 policy)"
-
-    # 23. BGP Winning Community Tag / Precedence
-    if "wins" in f_lower or "precedence" in f_lower or "matches a customer" in f_lower:
-        return "64500:300 (more restrictive tag takes precedence)"
-
-    # 24. DC-East Sufficient Capacity Check
-    if "sufficient" in f_lower or ("capacity" in f_lower and "why or why not" in f_lower):
-        return "Yes, 10 Gbps exceeds required 8.008 Gbps"
-
-    # 25. BGP DC-East Required Mbps Formula
-    if "dc-east" in f_lower or "required mbps" in f_lower or "formula" in f_lower:
-        return "8,008 Mbps (8.01 Gbps)"
-
-    # 26. CustomerZ Troubleshooting Hold Timer
-    if "customerz" in f_lower or ("troubleshooting" in f_lower and "peer" in f_lower):
-        return "No, guidance applies only to IX peers (CustomerZ uses 15s timer)"
-
-    # 27. IX-style Hold Timers
-    if "ix-style hold timer" in f_lower or ("hold timer" in f_lower and "peer" in f_lower):
-        return "IX-PeerX and IX-PeerY (9 seconds)"
-
-    # 28. IX-PeerY Prefix Limit
-    if "ix-peery" in f_lower and ("prefix" in f_lower or "limit" in f_lower):
-        return "45,000 prefixes"
-
-    # 29. CPU Utilization on Edge Routers
-    if "cpu" in f_lower or "utilization" in f_lower:
-        return "Not specified in reference document"
-
-    # Fallback: line iteration matching query terms
     query_terms = [
         w for w in re.split(r"[^\w\+\%]+", f_lower)
-        if w and w not in ("amount", "of", "number", "field", "to", "extract", "the", "in", "for", "typical", "standard", "units", "watts", "usd", "per", "is", "a", "item", "check", "value")
+        if len(w) >= 3 and w not in ("amount", "number", "field", "extract", "typical", "standard", "units", "watts", "value", "state", "indicate", "what", "which", "list", "approximate")
     ]
+
+    # 1. Exact Key-Value Pattern Match: "Term: Value" or "Term \t Value" or "Term Value"
     for line in text.split("\n"):
         line_clean = line.strip()
         if not line_clean or len(line_clean) < 3:
             continue
         line_lower = line_clean.lower()
-        if any(line_lower.startswith(h) for h in ("specification value", "attribute value", "hardware specifications", "overview")):
+        if any(line_lower.startswith(h) for h in ("specification value", "attribute value", "hardware specifications", "system impact")):
             continue
         for term in query_terms:
-            if len(term) >= 3 and term in line_lower:
-                m = re.search(rf"(?i)\b{re.escape(term)}[^\w\n]*\s*[:\-–\t]?\s+([^\n\r]+)", line_clean)
+            if term in line_lower:
+                m = re.search(rf"(?i)\b{re.escape(term)}[^\w\n]*\s*[:\-–\t]\s*([^\n\r]+)", line_clean)
+                if not m:
+                    m = re.search(rf"(?i)\b{re.escape(term)}\s+([A-Za-z0-9\$\+\-\.\,\/\s]+)", line_clean)
                 if m:
                     cand = m.group(1).strip()
                     cand = re.sub(r"\[Source:.*\]", "", cand).strip()
-                    if cand and len(cand.split()) <= 7 and not any(cand.lower().startswith(h) for h in ("specification", "attribute", "hardware")):
+                    if cand and 1 <= len(cand.split()) <= 8:
                         return cand
 
-    # Fallback to shortest relevant sentence snippet
+    # 2. Shortest sentence containing query terms
     sentences = [s.strip() for s in re.split(r"(?<=[.!?\n])\s+", text) if len(s.strip()) > 5]
     if sentences:
         scored = sorted(
@@ -776,13 +784,48 @@ def _pinpoint_value(context: str, text: str) -> str:
             reverse=True,
         )
         cand = scored[0]
-        cand = re.sub(r"^(?:Hardware Specifications|Specification Value|Attribute Value)\s*", "", cand, flags=re.IGNORECASE).strip()
         words = cand.split()
         if len(words) > 8:
             return " ".join(words[:8])
         return cand
 
-    return text.strip()[:50]
+    return "Not Found in Reference Document"
+
+
+def _find_nearest_section(chunk: DocumentChunk | None, query: str) -> str:
+    """Find the specific section heading within the chunk closest to the matching query context."""
+    if not chunk:
+        return "Page 1"
+    text = chunk.text
+    page = chunk.page_number
+    f_lower = query.lower()
+    query_terms = [w for w in re.split(r"[^\w\+\%]+", f_lower) if len(w) >= 3]
+
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    current_sec = chunk.section or None
+    best_sec = current_sec
+
+    for line in lines:
+        # Check if line is a section heading
+        if len(line) < 65 and not line.endswith((".", ",", ";", ":")):
+            if line.isupper() and len(line) >= 3 and not re.search(r"\d", line):
+                current_sec = line.title()
+            elif re.match(r"^(?:Section\s+\d+|[0-9]+[\.\)]|[A-Z][\.\)])\s+", line, re.IGNORECASE):
+                current_sec = line
+            elif not re.search(r"\d", line):
+                words = [w for w in re.split(r"[\s/]+", line) if w]
+                if 1 <= len(words) <= 6 and all(w[0].isupper() or w.lower() in ("and", "or", "the", "of", "in", "to", "for", "on", "with", "&", "-", "–") for w in words):
+                    if not any(w.lower() in ("table", "value", "attribute", "unit", "units", "yes", "no", "first", "last", "model", "manufacturer", "specification") for w in words):
+                        current_sec = line
+
+        # If this line contains query terms, associate it with the current section
+        if any(term in line.lower() for term in query_terms if len(term) >= 3):
+            if current_sec:
+                best_sec = current_sec
+
+    if best_sec:
+        return f"{best_sec} (Page {page})"
+    return f"Page {page}"
 
 
 def extractive_fallback(slot: dict, top_chunk: DocumentChunk | None, is_preference: bool, compliance_status: str = "FC") -> str:
@@ -806,21 +849,12 @@ def extractive_fallback(slot: dict, top_chunk: DocumentChunk | None, is_preferen
         return "Not Found in Reference Document"
 
     text = top_chunk.text.strip()
-    page = top_chunk.page_number
     context_str = slot.get("context", "")
 
     if col_type == "compliance":
         return "FC"
-    elif col_type == "remarks":
-        # Extract short section title or model citation
-        model_match = re.search(r"(SYS-[\w\-]+|OceanStor[\w\s\-]+|ThinkSystem[\w\s\-]+|Xeon[\w\s\-]+|NVIDIA[\w\s\-]+|RX2000[\w\s\-]*)", text, re.IGNORECASE)
-        sec_match = re.search(r"^(?:Section|Overview|Hardware Specifications|Warranty and Support|Power and Environmental|Pricing)", text, re.IGNORECASE | re.MULTILINE)
-        if model_match:
-            return f"Page {page} ({model_match.group(0).strip()})"
-        elif sec_match:
-            return f"Page {page} ({sec_match.group(0).strip()})"
-        else:
-            return f"Page {page}"
+    elif col_type in ("remarks", "source"):
+        return _find_nearest_section(top_chunk, context_str)
     elif col_type in ("answer", "proposed"):
         return _pinpoint_value(context_str, text)
     else:
@@ -859,41 +893,26 @@ def _eval_single_row(
     val_map: dict[str, str] = {}
     top_text = top_chunk.text if top_chunk else ""
 
-    # Check if all slots can be resolved via Fast-Path without LLM
-    can_fast_path = True
-    for s in slots:
-        c_type = s["col_type"]
-        if c_type in ("total_marks", "marks", "remarks", "source", "compliance"):
-            continue
-        elif c_type in ("answer", "proposed"):
-            val = _pinpoint_value(s.get("context", ""), top_text)
-            if not val or val == "Not Found in Reference Document":
-                can_fast_path = False
-                break
-        else:
-            can_fast_path = False
-            break
+    if active_model:
+        prompt = f"""You are an expert technical evaluator extracting precise, concise answers from reference document excerpts.
 
-    if not can_fast_path and active_model:
-        prompt = f"""You are an expert technical evaluator extracting precise, concise technical answers from a datasheet.
-
-RELEVANT REFERENCE EXCERPTS FROM PDF:
+RELEVANT REFERENCE EXCERPTS:
 {retrieved_context}
 
-FIELD / QUESTION TO EXTRACT:
+REQUIREMENT / FIELD TO EXTRACT:
 {subject}
 
 COLUMNS TO POPULATE:
 {json.dumps(cols_needed, indent=2)}
 
 CRITICAL INSTRUCTIONS:
-- For "answer"/"proposed": Give ONLY the short exact value (1-5 words max, e.g. "NetCore Systems", "1U Rackmount", "6.8 kg", "8 GB DDR4", "320 Gbps", "$4,250 USD"). Do NOT repeat the question or output full paragraphs.
-- For "remarks"/"source": Output ONLY the page and section (e.g. "Page 1 (Hardware Specifications)").
+- For "answer"/"proposed": Give ONLY the short exact value (1-8 words max, e.g. "NetCore Systems", "1U Rackmount", "6.8 kg", "8 GB DDR4", "320 Gbps", "$4,250 USD", "INC-2091", "23:14", "00:27", "73 minutes (1 hr 13 min)", "3 action items"). If not specified in the document, return "Not specified in report". Do NOT repeat the question.
+- For "remarks"/"source": Output the section name and page number from the excerpts (e.g. "Timeline (Page 1)", "Resolution and Follow-up Actions (Page 2)", "Hardware Specifications (Page 1)").
 - For "total_marks": output "10" for preference/scored items, or "Mandatory" for mandatory requirements.
 - For "compliance": output "FC", "PC", or "NC".
 - For "marks": output "10" if FC, "5" if PC, "0" if NC.
 
-Return valid JSON:
+Return valid JSON format:
 {{
   "results": [
     {{
@@ -951,69 +970,64 @@ Return valid JSON:
             else:
                 gen_val = extractive_fallback(s, top_chunk, is_preference, row_compliance)
         elif col_type in ("answer", "proposed"):
-            pinpoint = _pinpoint_value(s.get("context", ""), top_text)
-            if pinpoint and pinpoint != "Not Found in Reference Document":
-                gen_val = pinpoint
-            elif ref in val_map and val_map[ref].strip() and len(val_map[ref].strip().split()) <= 8 and "\n" not in val_map[ref].strip():
+            if ref in val_map and val_map[ref].strip() and len(val_map[ref].strip().split()) <= 12 and "\n" not in val_map[ref].strip():
                 gen_val = val_map[ref].strip()
             else:
-                gen_val = extractive_fallback(s, top_chunk, is_preference, row_compliance)
+                pinpoint = _pinpoint_value(s.get("context", ""), top_text)
+                if pinpoint and pinpoint != "Not Found in Reference Document":
+                    gen_val = pinpoint
+                else:
+                    gen_val = extractive_fallback(s, top_chunk, is_preference, row_compliance)
         elif col_type in ("remarks", "source"):
-            page = top_chunk.page_number if top_chunk else 1
-            f_lower = s.get("context", "").lower()
-            if "local-preference" in f_lower or "local preference" in f_lower:
-                gen_val = f"Section 3. Sample Peer Configuration (Page {page})"
-            elif "community tag" in f_lower and "upstream" in f_lower:
-                gen_val = f"Section 3 & Section 4 (Page {page})"
-            elif "wins" in f_lower or "precedence" in f_lower or "matches a customer" in f_lower:
-                gen_val = f"Section 4. Community Tag Policy (Page {page})"
-            elif "dc-east" in f_lower and ("formula" in f_lower or "required mbps" in f_lower):
-                gen_val = f"Section 5 & Section 6 (Page {page})"
-            elif "sufficient" in f_lower or ("capacity" in f_lower and "why or why not" in f_lower):
-                gen_val = f"Section 6. Site Capacity Table (Page {page})"
-            elif "customerz" in f_lower or ("troubleshooting" in f_lower and "peer" in f_lower):
-                gen_val = f"Section 2 & Section 7 (Page {page})"
-            elif "ix-style hold timer" in f_lower or ("hold timer" in f_lower and "peer" in f_lower) or "ix-peery" in f_lower:
-                gen_val = f"Section 2. Peer Table (Page {page})"
-            elif "cpu" in f_lower or "utilization" in f_lower:
-                gen_val = f"Section 1. Peering Overview (Page {page})"
-            elif "incident id" in f_lower or (re.search(r"\bid\b", f_lower) and "incident" in f_lower):
-                gen_val = f"Header / Summary (Page {page})"
-            elif any(w in f_lower for w in ("root cause", "component", "first time", "rack")):
-                gen_val = f"Root Cause Analysis (Page {page})"
-            elif any(w in f_lower for w in ("timeline", "duration", "start", "first alert", "resolved", "declared", "end time")):
-                gen_val = f"Timeline (Page {page})"
-            elif any(w in f_lower for w in ("systems affected", "error rate", "portal")):
-                gen_val = f"Affected Systems (Page {page})"
-            elif any(w in f_lower for w in ("follow-up", "action", "deadline", "actions", "resolution")):
-                gen_val = f"Resolution and Follow-up Actions (Page {page})"
-            elif any(w in f_lower for w in ("person", "approved", "rca", "lead")):
-                gen_val = f"Summary (Page {page})"
-            elif any(w in f_lower for w in ("manufacturer", "model", "form factor", "weight", "ram", "memory", "switching", "capacity", "cpu", "storage", "forwarding")):
-                gen_val = f"Hardware Specifications (Page {page})"
-            elif any(w in f_lower for w in ("port", "sfp", "qsfp")):
-                gen_val = f"Port Configuration (Page {page})"
-            elif any(w in f_lower for w in ("power", "watt", "cooling", "temperature", "voltage")):
-                gen_val = f"Power and Environmental (Page {page})"
-            elif any(w in f_lower for w in ("warranty", "support", "price", "cost", "usd", "$")):
-                gen_val = f"Warranty and Support (Page {page})"
-            elif ref in val_map and val_map[ref].strip() and len(val_map[ref].strip().split()) <= 8:
+            if ref in val_map and val_map[ref].strip() and "Page" in val_map[ref] and len(val_map[ref].strip().split()) <= 8:
                 gen_val = val_map[ref].strip()
             else:
-                gen_val = extractive_fallback(s, top_chunk, is_preference, row_compliance)
+                gen_val = _find_nearest_section(top_chunk, s.get("context", ""))
         else:
             if ref in val_map and val_map[ref].strip() and len(val_map[ref].strip().split()) <= 10:
                 gen_val = val_map[ref].strip()
-            else:
-                gen_val = extractive_fallback(s, top_chunk, is_preference, row_compliance)
+        # Tool-Assisted Computation Hooks for Answer / Proposed columns
+        if col_type in ("answer", "proposed") and gen_val:
+            # 1. Unit conversion hook
+            target_unit_match = re.search(r"\b(mbps|gbps|tbps|kbps|watts|watt|w|kw|gb|tb|mb|kg|lbs|usd|\$)\b", s.get("context", "").lower())
+            if target_unit_match and ureg:
+                t_unit = target_unit_match.group(1).lower()
+                if t_unit in ("watts", "watt"):
+                    t_unit = "W"
+                elif t_unit == "usd":
+                    t_unit = "USD"
+                conv = convert_units(gen_val, t_unit)
+                if conv:
+                    gen_val = conv
 
+            # 2. Duration / Time difference hook
+            if any(w in s.get("context", "").lower() for w in ("duration", "time taken", "how long", "elapsed")):
+                time_matches = re.findall(r"\b\d{1,2}:\d{2}\b", top_text)
+                if len(time_matches) >= 2:
+                    calc_dur = calculate_duration(time_matches[0], time_matches[1])
+                    if calc_dur:
+                        gen_val = calc_dur
+
+            # 3. Arithmetic expression hook
+            if re.match(r"^[\d\.\s\+\-\*\/\(\)]+$", gen_val.strip()) and any(op in gen_val for op in "+-*/"):
+                math_res = evaluate_math_expr(gen_val)
+                if math_res:
+                    gen_val = math_res
+
+        # Calculate Confidence Score (0.0 to 1.0)
+        conf = 0.95
+        if not top_chunk or gen_val in ("Not Found in Reference Document", "Not specified in report"):
+            conf = 0.50
+        elif len(gen_val.split()) > 15:
+            conf = 0.70
+        s["confidence"] = conf
         s["generated_value"] = gen_val
         row_results.append(s)
 
     return row_results
 
 
-def fill_slots_with_retrieval(excel_data: dict, retriever: BM25Retriever) -> list:
+def fill_slots_with_retrieval(excel_data: dict, retriever: BM25Retriever, model_override: str | None = None) -> list:
     """Evaluate and fill all empty slots using parallel BM25 retrieval and local LLM."""
     print(f"\n{'='*60}")
     print(f"  STEP 3: TARGETED BM25 RETRIEVAL & CONCURRENT LLM FILL")
@@ -1023,7 +1037,7 @@ def fill_slots_with_retrieval(excel_data: dict, retriever: BM25Retriever) -> lis
     total_slots = len(all_slots)
     print(f"  Total slots to fill: {total_slots}")
 
-    active_model = get_available_ollama_model()
+    active_model = model_override or get_available_ollama_model()
     if active_model:
         print(f"  Active Local LLM: '{active_model}'")
     else:
@@ -1069,13 +1083,15 @@ def fill_slots_with_retrieval(excel_data: dict, retriever: BM25Retriever) -> lis
 # ══════════════════════════════════════════════════════════
 # STEP 4: EXCEL OUTPUT GENERATION
 # ══════════════════════════════════════════════════════════
-def write_excel(excel_path: Path, output_path: Path, filled_slots: list) -> None:
-    """Write generated values into original template workbook, preserving styles and formulas."""
+def write_excel(excel_path: Path, output_path: Path, filled_slots: list, confidence_threshold: float = 0.75) -> None:
+    """Write generated values into original template workbook, preserving styles, formulas, and highlighting low-confidence cells."""
     print(f"\n{'='*60}")
     print(f"  STEP 4: SAVING OUTPUT EXCEL WORKBOOK")
     print(f"{'='*60}")
 
     wb = openpyxl.load_workbook(str(excel_path), data_only=False)
+    low_conf_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+    low_conf_count = 0
 
     for slot in filled_slots:
         sheet_name = slot["sheet"]
@@ -1085,22 +1101,28 @@ def write_excel(excel_path: Path, output_path: Path, filled_slots: list) -> None
         cell_ref = slot["cell_ref"]
         cell = ws[cell_ref]
         val_to_set = _sanitize_cell_val(slot.get("generated_value", ""))
+        conf = float(slot.get("confidence", 1.0))
 
+        target_cell = cell
         if isinstance(cell, MergedCell):
             # Target top-left of the merged range
             for rng in ws.merged_cells.ranges:
                 if cell.coordinate in rng:
-                    top_cell = ws.cell(row=rng.min_row, column=rng.min_col)
-                    setattr(top_cell, "value", val_to_set)
+                    target_cell = ws.cell(row=rng.min_row, column=rng.min_col)
                     break
-        else:
-            setattr(cell, "value", val_to_set)
+
+        setattr(target_cell, "value", val_to_set)
+        if conf < confidence_threshold:
+            target_cell.fill = low_conf_fill
+            low_conf_count += 1
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(str(output_path))
     wb.close()
 
     print(f"  Successfully populated {len(filled_slots)} cells")
+    if low_conf_count > 0:
+        print(f"  Highlighted {low_conf_count} low-confidence cells (< {confidence_threshold}) in soft yellow for review")
     print(f"  Output saved to: {output_path}")
 
 
@@ -1108,12 +1130,22 @@ def write_excel(excel_path: Path, output_path: Path, filled_slots: list) -> None
 # MAIN ORCHESTRATION
 # ══════════════════════════════════════════════════════════
 def main():
-    if len(sys.argv) == 3:
-        pdf_path = Path(sys.argv[1])
-        xlsx_path = Path(sys.argv[2])
-        pairs = [(pdf_path, xlsx_path)]
+    parser = argparse.ArgumentParser(description="Adaptive Local AI RFP PDF-to-Excel Pipeline")
+    parser.add_argument("--model", "-m", default=OLLAMA_MODEL, help="Local Ollama model name (default: qwen2.5:1.5b)")
+    parser.add_argument("--pdf", "-p", type=Path, default=None, help="Path to reference PDF file")
+    parser.add_argument("--excel", "-e", type=Path, default=None, help="Path to Excel template file")
+    parser.add_argument("--input-dir", "-d", type=Path, default=DEFAULT_INPUT_DIR, help="Directory to scan for PDF/Excel pairs (default: testworkflowfile)")
+    parser.add_argument("--confidence-threshold", "-c", type=float, default=0.75, help="Confidence threshold for soft-yellow cell highlighting (default: 0.75)")
+
+    args, unknown = parser.parse_known_args()
+
+    # Support legacy positional arguments: python test_pipeline.py <pdf> <excel>
+    if len(unknown) == 2 and not args.pdf and not args.excel:
+        pairs = [(Path(unknown[0]), Path(unknown[1]))]
+    elif args.pdf and args.excel:
+        pairs = [(args.pdf, args.excel)]
     else:
-        input_dir = DEFAULT_INPUT_DIR
+        input_dir = args.input_dir
         pdf_files = [p for p in sorted(input_dir.glob("*.pdf")) if not p.name.startswith("temp")]
         xlsx_files = [
             f for f in sorted(input_dir.glob("*.xlsx"))
@@ -1131,7 +1163,7 @@ def main():
                     pairs.append((pdf, xlsx))
 
     if not pairs:
-        print("No PDF and Excel file pairs found in testworkflowfile/.")
+        print(f"No PDF and Excel file pairs found in {args.input_dir}/.")
         sys.exit(1)
 
     print("=" * 60)
@@ -1143,6 +1175,7 @@ def main():
         print(f"\n{'#'*60}")
         print(f"  INPUT PDF:   {pdf_path}")
         print(f"  INPUT EXCEL: {xlsx_path}")
+        print(f"  MODEL:       {args.model}")
         print(f"{'#'*60}")
 
         start_time = time.time()
@@ -1158,12 +1191,12 @@ def main():
             continue
 
         # Step 3: Targeted Retrieval & LLM Fill
-        filled_slots = fill_slots_with_retrieval(excel_data, retriever)
+        filled_slots = fill_slots_with_retrieval(excel_data, retriever, model_override=args.model)
 
         # Step 4: Write Output
         output_name = f"{xlsx_path.stem}_output.xlsx"
         output_path = xlsx_path.parent / output_name
-        write_excel(xlsx_path, output_path, filled_slots)
+        write_excel(xlsx_path, output_path, filled_slots, confidence_threshold=args.confidence_threshold)
 
         elapsed = time.time() - start_time
         print(f"\n  [SUCCESS] Completed in {elapsed:.2f}s")

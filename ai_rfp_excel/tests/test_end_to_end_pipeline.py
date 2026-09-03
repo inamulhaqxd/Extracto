@@ -33,21 +33,28 @@ async def test_complete_end_to_end_rfp_automation_pipeline(
     assert len(page_text.text) > 0
 
     extracted_facts: list[FactItem] = []
-    # Create fact items from extracted lines
-    for line in page_text.text.split("\n"):
-        line_clean = line.strip()
-        if ":" in line_clean:
-            parts = line_clean.split(":", 1)
+    # Create fact items from extracted lines/segments
+    import re
+    raw_lines = page_text.text.split("\n")
+    all_segments: list[str] = []
+    for line in raw_lines:
+        segs = re.split(r"(?=(?:Model|Processors|Memory|Storage|Power|Network):)", line)
+        all_segments.extend([s.strip() for s in segs if s.strip()])
+
+    for seg in all_segments:
+        if ":" in seg:
+            parts = seg.split(":", 1)
             field = parts[0].strip()
             val = parts[1].strip()
-            extracted_facts.append(
-                FactItem(
-                    field_name=field,
-                    value=val,
-                    source_page=1,
-                    confidence=0.95,
+            if field and val:
+                extracted_facts.append(
+                    FactItem(
+                        field_name=field,
+                        value=val,
+                        source_page=1,
+                        confidence=0.95,
+                    )
                 )
-            )
 
     assert len(extracted_facts) >= 4
 

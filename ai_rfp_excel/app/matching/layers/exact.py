@@ -9,7 +9,10 @@ from ai_rfp_excel.app.matching.models import (
 
 
 class ExactMatchLayer:
-    """Layer 1: Exact string, model number, or part number matching."""
+    """Layer 1: Exact string, model number, or part number matching.
+
+    Strictly matches 1:1 clean atomic specifications. Never matches multi-line text dumps.
+    """
 
     name = "exact_match"
 
@@ -36,13 +39,7 @@ class ExactMatchLayer:
             if filtered:
                 candidate_facts = filtered
 
-        # Sort candidate facts so exact matches with longer field names match first
-        sorted_facts = sorted(
-            candidate_facts,
-            key=lambda f: len(f.field_name or "") if (f.field_name and f.field_name.lower() in req_clean) else 0,
-            reverse=True,
-        )
-
+        # Disallow matching generic header / section words
         invalid_values = {
             "configuration",
             "specifications",
@@ -59,24 +56,36 @@ class ExactMatchLayer:
             "port configuration",
             "power and environmental",
             "warranty and support",
+            "compliance",
+            "compliance/marks",
         }
 
-        for fact in sorted_facts:
+        # Normalize trailing descriptor nouns
+        norm_req = re.sub(r"\b(?:processors?|cpus?|modules?|units?|cards?|appliances?)\b", "", req_clean).strip()
+
+        for fact in candidate_facts:
+            # Skip multi-line paragraphs or whole-page contexts for Layer 1 exact match
+            if "\n" in fact.value or len(fact.value) > 120:
+                continue
+
             f_name_clean = fact.field_name.strip().lower() if fact.field_name else ""
             fact_val_clean = fact.value.strip().lower()
             if not fact_val_clean or fact_val_clean in invalid_values:
                 continue
 
-            # Exact field name or exact value match (avoid single-word loose matches like 'port')
-            is_exact = (
-                (req_clean == f_name_clean)
+            # Strip multiplier prefixes (e.g. "2x Intel Xeon Gold 6430" -> "intel xeon gold 6430")
+            unprefixed_val = re.sub(r"^\d+\s*x\s*", "", fact_val_clean).strip()
+            norm_fact_val = re.sub(r"\b(?:processors?|cpus?|modules?|units?|cards?|appliances?)\b", "", fact_val_clean).strip()
+
+            # Exact match conditions
+            is_strict_exact = (
+                (bool(f_name_clean) and req_clean == f_name_clean)
                 or (req_clean == fact_val_clean)
-                or (req_clean in fact_val_clean and len(req_clean) >= 6)
-                or (bool(f_name_clean) and len(f_name_clean) >= 4 and f_name_clean == req_clean.split()[0])
-                or (bool(f_name_clean) and f_name_clean in req_clean and len(f_name_clean.split()) >= 2)
+                or (req_clean == unprefixed_val)
+                or (bool(norm_req) and norm_req == norm_fact_val)
             )
 
-            if is_exact:
+            if is_strict_exact:
                 clean_val = fact.value.strip()
                 if f_name_clean and clean_val.lower().startswith(f_name_clean):
                     clean_val = clean_val[len(f_name_clean):].strip(" :-\t")
