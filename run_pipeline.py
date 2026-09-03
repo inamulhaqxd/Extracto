@@ -44,17 +44,19 @@ def extract_pdf_facts(pdf_path: str) -> list[FactItem]:
                         )
                     )
             elif len(line.split()) >= 2:
-                # Key-value line heuristic (e.g. "Manufacturer NetCore Systems")
                 words = line.split()
-                if len(words) <= 8 and not line.lower().startswith("section"):
-                    facts.append(
-                        FactItem(
-                            field_name=words[0],
-                            value=" ".join(words[1:]),
-                            source_page=i + 1,
-                            confidence=0.85,
+                for num_label_words in (1, 2, 3):
+                    if len(words) > num_label_words and not line.lower().startswith("section"):
+                        lbl = " ".join(words[:num_label_words])
+                        val = " ".join(words[num_label_words:])
+                        facts.append(
+                            FactItem(
+                                field_name=lbl,
+                                value=val,
+                                source_page=i + 1,
+                                confidence=0.90,
+                            )
                         )
-                    )
                 facts.append(
                     FactItem(
                         field_name=line[:40],
@@ -72,6 +74,7 @@ async def run_main_pipeline(
     excel_path: str,
     output_dir: str = "testworkflowfile",
     create_summary: bool = True,
+    model: str | None = None,
 ) -> str:
     start_time = time.time()
     print("=" * 60)
@@ -80,6 +83,7 @@ async def run_main_pipeline(
     print("=" * 60)
     print(f"\n  [INPUT PDF]   : {pdf_path}")
     print(f"  [INPUT EXCEL] : {excel_path}")
+    print(f"  [MODEL]       : {model or 'Default'}")
     print(f"  [SUMMARY TAB] : {'Enabled' if create_summary else 'Disabled'}")
 
     # Step 1: Ingestion
@@ -112,10 +116,12 @@ async def run_main_pipeline(
                 requirement_text=req.requirement_text,
                 facts=facts,
                 requirement_id=req.requirement_id,
+                model_name=model,
             )
+            print(f"    - [{decision.state.value}] '{req.requirement_text[:45]}...' -> '{decision.matched_value}' ({decision.resolving_layer})")
             decisions.append(decision)
 
-    print(f"  Completed {len(decisions)} compliance evaluations")
+    print(f"\n  Completed {len(decisions)} compliance evaluations")
 
     # Step 4: Output Population
     print("\n" + "=" * 60)
@@ -140,10 +146,11 @@ def main() -> None:
     parser.add_argument("pdf", nargs="?", default="testworkflowfile/vendor_datasheet_rx2000.pdf", help="Path to input PDF file")
     parser.add_argument("excel", nargs="?", default="testworkflowfile/asset_inventory_extraction.xlsx", help="Path to input Excel file")
     parser.add_argument("-o", "--output-dir", default="testworkflowfile", help="Output directory for generated Excel")
+    parser.add_argument("-m", "--model", default="tinyllama", help="LLM Model to use (default: tinyllama)")
     parser.add_argument("--no-summary", action="store_true", help="Do not generate Compliance Summary dashboard tab")
     args = parser.parse_args()
 
-    asyncio.run(run_main_pipeline(args.pdf, args.excel, args.output_dir, create_summary=not args.no_summary))
+    asyncio.run(run_main_pipeline(args.pdf, args.excel, args.output_dir, create_summary=not args.no_summary, model=args.model))
 
 
 if __name__ == "__main__":

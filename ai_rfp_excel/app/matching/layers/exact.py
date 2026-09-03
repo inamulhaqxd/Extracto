@@ -43,13 +43,21 @@ class ExactMatchLayer:
                 continue
 
             # Exact field name or value match
-            is_exact = (req_clean == f_name_clean) or (req_clean == fact_val_clean) or (req_clean in fact_val_clean and len(req_clean) >= 6)
+            is_exact = (
+                (req_clean == f_name_clean)
+                or (req_clean == fact_val_clean)
+                or (req_clean in fact_val_clean and len(req_clean) >= 6)
+                or (bool(f_name_clean) and len(f_name_clean) >= 4 and f_name_clean in req_clean)
+            )
 
             if is_exact:
                 clean_val = fact.value.strip()
                 if f_name_clean and clean_val.lower().startswith(f_name_clean):
                     clean_val = clean_val[len(f_name_clean):].strip(" :-\t")
                 clean_val = re.sub(r"(?i)^(?:draw\s*\(typical\)|power\s*draw)\s*[:\-\t]?\s*", "", clean_val).strip()
+
+                if not clean_val or clean_val.lower() == req_clean:
+                    continue
 
                 citation_parts: list[str] = []
                 if fact.source_page:
