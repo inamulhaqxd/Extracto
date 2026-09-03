@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 import openpyxl
-from openpyxl.cell.cell import Cell, MergedCell
+from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
@@ -66,20 +66,19 @@ class ExcelWriter:
             )
 
         cell = ws[cell_coord]
-        from openpyxl.cell.cell import MergedCell
 
         if isinstance(cell, MergedCell):
             for rng in ws.merged_cells.ranges:
                 if cell.coordinate in rng:
                     top_cell = ws.cell(row=rng.min_row, column=rng.min_col)
-                    setattr(top_cell, "value", value)
+                    top_cell.value = value
                     if fill:
-                        setattr(top_cell, "fill", fill)
+                        top_cell.fill = fill
                     break
         else:
-            setattr(cell, "value", value)
+            cell.value = value
             if fill:
-                setattr(cell, "fill", fill)
+                cell.fill = fill
 
     def populate_workbook(
         self,

@@ -1,10 +1,10 @@
 from pathlib import Path
+
 try:
     import fitz
 except Exception:
     fitz = None
 
-import pypdfium2
 
 from ai_rfp_excel.app.config import settings
 from ai_rfp_excel.app.ingestion.models import ExtractedImage
@@ -62,9 +62,6 @@ def extract_images_from_page(
                     image_id=f"IMG-P{page_number + 1:02d}-{img_idx + 1:02d}",
                     page_number=page_number,
                     image_path=str(image_file_path),
-                    width=width,
-                    height=height,
-                    format=image_ext,
                 )
             )
         except Exception:

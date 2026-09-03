@@ -1,10 +1,11 @@
+import re
+
 from ai_rfp_excel.app.matching.models import (
     ComplianceState,
     EvidenceItem,
     FactItem,
     LayerResult,
 )
-import re
 
 
 class ExactMatchLayer:
@@ -47,24 +48,17 @@ class ExactMatchLayer:
             if is_exact:
                 clean_val = fact.value.strip()
                 if f_name_clean and clean_val.lower().startswith(f_name_clean):
-                    clean_val = clean_val[len(f_name_clean):].strip(" :-–\t")
-                clean_val = re.sub(r"(?i)^(?:draw\s*\(typical\)|power\s*draw)\s*[:\-–\t]?\s*", "", clean_val).strip()
+                    clean_val = clean_val[len(f_name_clean):].strip(" :-\t")
+                clean_val = re.sub(r"(?i)^(?:draw\s*\(typical\)|power\s*draw)\s*[:\-\t]?\s*", "", clean_val).strip()
 
-                if any(w in req_clean for w in ("power", "draw", "watt")):
-                    m_w = re.search(r"\b\d+\s*W\b", fact.value, re.IGNORECASE)
-                    if m_w:
-                        clean_val = m_w.group(0)
-                    citation_ref = f"Hardware Specifications (Page {fact.source_page})"
-                elif any(w in req_clean for w in ("port", "sfp", "qsfp")):
-                    citation_ref = f"Port Configuration (Page {fact.source_page})"
-                elif any(w in req_clean for w in ("warranty", "price", "cost", "usd", "$")):
-                    citation_ref = f"Warranty and Support (Page {fact.source_page})"
-                else:
-                    citation_ref = f"Hardware Specifications (Page {fact.source_page})" if fact.source_page else "Document reference"
+                citation_parts: list[str] = []
+                if fact.source_page:
+                    citation_parts.append(f"Page {fact.source_page}")
                 if fact.source_table_id:
-                    citation_ref = f"Page {fact.source_page}, Table {fact.source_table_id}" if fact.source_page else f"Table {fact.source_table_id}"
+                    citation_parts.append(f"Table {fact.source_table_id}")
                 elif fact.source_image_id:
-                    citation_ref = f"Page {fact.source_page}, Image {fact.source_image_id}" if fact.source_page else f"Image {fact.source_image_id}"
+                    citation_parts.append(f"Image {fact.source_image_id}")
+                citation_ref = ", ".join(citation_parts) if citation_parts else "Document reference"
 
                 evidence = EvidenceItem(
                     source_document_id=fact.source_document_id,

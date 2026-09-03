@@ -201,9 +201,9 @@ async def execute_pipeline_background(
                     except Exception:
                         try:
                             import pdfplumber
-                            with pdfplumber.open(str(pdf_path)) as pdf_obj:
-                                for p_idx, p in enumerate(pdf_obj.pages):
-                                    pages_text_list.append((p_idx + 1, p.extract_text() or ""))
+                            with pdfplumber.open(str(pdf_path)) as plumber_pdf:
+                                for p_idx, plumber_page in enumerate(plumber_pdf.pages):
+                                    pages_text_list.append((p_idx + 1, plumber_page.extract_text() or ""))
                         except Exception:
                             try:
                                 import fitz

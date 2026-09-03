@@ -1,5 +1,14 @@
+import sys
+from types import ModuleType
 from typing import Any
 from unittest.mock import MagicMock, patch
+
+try:
+    import fitz  # noqa: F401
+except Exception:
+    mock_fitz_module = ModuleType("fitz")
+    mock_fitz_module.open = MagicMock()  # type: ignore
+    sys.modules["fitz"] = mock_fitz_module
 
 from ai_rfp_excel.app.ingestion.models import OCRResult
 from ai_rfp_excel.app.ingestion.ocr.processor import needs_ocr, ocr_page, ocr_with_tesseract

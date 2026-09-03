@@ -1,4 +1,5 @@
 from typing import Any
+
 from ai_rfp_excel.app.ingestion.models import ExtractedText
 
 
@@ -57,7 +58,7 @@ def extract_text_from_page(pdf_path: str, page_number: int) -> ExtractedText:
 
 def extract_text_from_pdf(pdf_path: str) -> list[ExtractedText]:
     results: list[ExtractedText] = []
-    
+
     # Fast page count detection
     total_pages = 0
     try:
