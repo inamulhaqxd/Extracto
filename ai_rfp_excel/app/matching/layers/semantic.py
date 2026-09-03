@@ -8,22 +8,22 @@ from ai_rfp_excel.app.matching.models import (
 )
 
 TECH_SYNONYMS: dict[str, set[str]] = {
-    "cpu": {"cpu", "processor", "processors", "cores", "compute", "xeon", "epyc"},
-    "processor": {"cpu", "processor", "processors", "cores", "compute", "xeon", "epyc"},
-    "ram": {"ram", "memory", "dimm", "ddr4", "ddr5", "ecc"},
-    "memory": {"ram", "memory", "dimm", "ddr4", "ddr5", "ecc"},
-    "storage": {"storage", "disk", "disks", "drive", "drives", "ssd", "hdd", "nvme", "array"},
+    "cpu": {"cpu", "processor", "processors", "cores", "compute", "xeon", "epyc", "ghz"},
+    "processor": {"cpu", "processor", "processors", "cores", "compute", "xeon", "epyc", "ghz"},
+    "ram": {"ram", "memory", "dimm", "ddr4", "ddr5", "ecc", "rdimm", "gb", "tb"},
+    "memory": {"ram", "memory", "dimm", "ddr4", "ddr5", "ecc", "rdimm", "gb", "tb"},
+    "storage": {"storage", "disk", "disks", "drive", "drives", "ssd", "hdd", "nvme", "array", "tb", "gb"},
     "ssd": {"ssd", "flash", "nvme", "solid state", "all-flash"},
-    "nic": {"nic", "adapter", "network card", "port", "ports", "interface", "interfaces", "ethernet"},
+    "nic": {"nic", "adapter", "network card", "port", "ports", "interface", "interfaces", "ethernet", "sfp", "qsfp", "gbps"},
     "switch": {"switch", "fabric", "tor", "spine", "leaf"},
-    "power": {"power", "psu", "power supply", "watt", "watts", "w", "feed"},
-    "fan": {"fan", "fans", "cooling", "blower", "thermal"},
+    "power": {"power", "psu", "power supply", "watt", "watts", "w", "feed", "draw"},
+    "fan": {"fan", "fans", "cooling", "blower", "thermal", "airflow"},
 }
 
 
 def tokenize(text: str) -> set[str]:
     """Tokenize text into lowercase alphanumeric words, filtering out short stopwords."""
-    stopwords = {"the", "a", "an", "and", "or", "of", "to", "in", "is", "for", "with", "must", "have", "be", "at", "by"}
+    stopwords = {"the", "a", "an", "and", "or", "of", "to", "in", "is", "for", "with", "must", "have", "be", "at", "by", "that", "this", "all"}
     words = re.findall(r"[a-zA-Z0-9]+", text.lower())
     return {w for w in words if len(w) > 1 and w not in stopwords}
 
@@ -65,7 +65,9 @@ class SemanticMatchLayer:
         best_fact: FactItem | None = None
 
         for fact in candidate_facts:
-            fact_tokens = tokenize(fact.value)
+            # Tokenize both field_name and value for rich match context
+            fact_composite = f"{fact.field_name or ''} {fact.value}"
+            fact_tokens = tokenize(fact_composite)
             if not fact_tokens:
                 continue
 
@@ -90,11 +92,17 @@ class SemanticMatchLayer:
                 best_score = score
                 best_fact = fact
 
-        if best_fact and best_score >= 0.50:
-            confidence = min(0.89, round(0.70 + (best_score * 0.2), 2))
-            citation_ref = f"Page {best_fact.source_page}" if best_fact.source_page else "Document reference"
+        if best_fact and best_score >= 0.45:
+            # High-confidence semantic match (>= 0.70 score) hits threshold directly
+            confidence = min(0.95, round(0.70 + (best_score * 0.28), 2))
+            citation_parts = []
+            if best_fact.source_page:
+                citation_parts.append(f"Page {best_fact.source_page}")
             if best_fact.source_table_id:
-                citation_ref += f", Table {best_fact.source_table_id}"
+                citation_parts.append(f"Table {best_fact.source_table_id}")
+            elif best_fact.source_image_id:
+                citation_parts.append(f"Image {best_fact.source_image_id}")
+            citation_ref = ", ".join(citation_parts) if citation_parts else "Document reference"
 
             evidence = EvidenceItem(
                 source_document_id=best_fact.source_document_id,

@@ -1,3 +1,5 @@
+import asyncio
+
 from ai_rfp_excel.app.ai.base import LLMInterface
 from ai_rfp_excel.app.ai.models import (
     ChatMessage,
@@ -21,6 +23,7 @@ class LLMReasoningLayer:
     """Layer 5: LLM reasoning for complex, multi-clause, or ambiguous compliance evaluation with relevance ranking."""
 
     name = "llm_reasoning"
+    _semaphore: asyncio.Semaphore = asyncio.Semaphore(2)
 
     def __init__(self, llm_provider: LLMInterface) -> None:
         self.llm_provider = llm_provider
@@ -29,7 +32,7 @@ class LLMReasoningLayer:
         self,
         requirement_text: str,
         facts: list[FactItem],
-        top_k: int = 15,
+        top_k: int = 4,
     ) -> list[FactItem]:
         """Rank candidate facts using token overlap and keyword relevance so top facts match requirement."""
         req_lower = requirement_text.lower()
@@ -75,8 +78,8 @@ class LLMReasoningLayer:
             if filtered:
                 candidate_facts = filtered
 
-        # Relevance rank facts against this specific requirement
-        top_facts = self._rank_candidate_facts(requirement_text, candidate_facts, top_k=15)
+        # Relevance rank top-4 facts against this specific requirement
+        top_facts = self._rank_candidate_facts(requirement_text, candidate_facts, top_k=4)
 
         fact_strings = [
             f"[{f.field_name or 'Spec'} (Page {f.source_page or 'N/A'})] {f.value}"
@@ -90,11 +93,12 @@ class LLMReasoningLayer:
         )
 
         try:
-            res: ComplianceAnalysisResult = await self.llm_provider.chat(
-                messages=[ChatMessage(role=Role.USER, content=prompt)],
-                response_model=ComplianceAnalysisResult,
-                model=model_name,
-            )
+            async with self._semaphore:
+                res: ComplianceAnalysisResult = await self.llm_provider.chat(
+                    messages=[ChatMessage(role=Role.USER, content=prompt)],
+                    response_model=ComplianceAnalysisResult,
+                    model=model_name,
+                )
 
             # Map ComplianceStatus to ComplianceState
             state_map = {
