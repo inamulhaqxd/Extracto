@@ -24,10 +24,10 @@ from openpyxl.worksheet.worksheet import Worksheet
 # Classification dictionaries per PRD Section 18 & 19
 REQUIREMENT_KEYWORDS = {
     "requirement", "requirements", "specification", "specifications",
-    "description", "feature", "features", "clause", "criteria",
+    "description", "feature", "features", "criteria",
     "specs", "technical specification", "technical requirement",
     "scope", "question", "questions", "item description", "parameter",
-    "parameters", "item", "item description / specification",
+    "parameters", "item description / specification",
 }
 
 COMPLIANCE_KEYWORDS = {
@@ -64,6 +64,8 @@ class TargetSlot(TypedDict):
     column_index: int
     cell_coordinate: str
     current_value: str | None
+    has_formula: bool
+    formula: str | None
 
 
 class ParsedRequirement(TypedDict):
@@ -133,8 +135,10 @@ def classify_column_header(header_text: str) -> str:
         return "remarks"
 
     # 3. Index / Serial
-    if any(phrase in clean for phrase in ("s no", "sr no", "sl no", "item no", "serial no")) or any(
-        k in tokens for k in ("s.no", "s/no", "sr.no", "sl.no", "#", "serial")
+    if (
+        clean in ("item", "clause", "cl", "ref", "index")
+        or any(phrase in clean for phrase in ("s no", "sr no", "sl no", "item no", "serial no", "clause no", "clause #", "cl no"))
+        or any(k in tokens for k in ("s.no", "s/no", "sr.no", "sl.no", "#", "serial"))
     ):
         return "index"
 
@@ -168,13 +172,16 @@ def detect_headers(ws: Worksheet) -> tuple[int | None, int, dict[int, str]]:
     header_row: int | None = None
     headers: dict[int, str] = {}
 
-    # 1. Scan rows 1 to min(15, max_r) for row with >= 2 DISTINCT concise text labels
-    for r in range(1, min(15, max_r + 1)):
+    # 1. Scan rows 1 to min(35, max_r + 1) for row with >= 2 DISTINCT concise text labels
+    for r in range(1, min(35, max_r + 1)):
         row_labels: list[str] = []
         for c in range(1, max_c + 1):
             val = get_merged_cell_value(ws, r, c)
-            if val is not None and 1 <= len(str(val).strip()) < 50:
-                row_labels.append(str(val).strip())
+            if val is not None:
+                s_val = str(val).strip()
+                # Accept headers up to 120 chars as long as they aren't multi-line paragraphs
+                if 1 <= len(s_val) < 120 and "\n\n" not in s_val:
+                    row_labels.append(s_val)
 
         # Avoid title banners merged across all columns
         if len(set(row_labels)) >= 2:
@@ -195,18 +202,20 @@ def detect_headers(ws: Worksheet) -> tuple[int | None, int, dict[int, str]]:
                 header_has_merged_cols = True
                 break
 
-        # If sub_row col 1 is a number / digit, it's data row, not subheader
-        v_sub_col1 = get_merged_cell_value(ws, sub_row, 1)
-        is_data_number = v_sub_col1 is not None and str(v_sub_col1).strip().isdigit()
-
-        if header_has_merged_cols and not is_data_number:
+        if header_has_merged_cols:
             sub_labels: list[str] = []
+            long_data_found = False
             for c in range(1, max_c + 1):
                 v_main = get_merged_cell_value(ws, header_row, c)
                 v_sub = get_merged_cell_value(ws, sub_row, c)
-                if v_sub is not None and v_sub != v_main and 1 <= len(str(v_sub).strip()) < 50:
-                    sub_labels.append(str(v_sub).strip())
-            if len(set(sub_labels)) >= 2:
+                if v_sub is not None and v_sub != v_main:
+                    s_sub = str(v_sub).strip()
+                    # Sentences, punctuation, or long texts indicate data rows rather than column headers
+                    if len(s_sub) > 80 or s_sub.endswith("."):
+                        long_data_found = True
+                    elif 1 <= len(s_sub) < 60:
+                        sub_labels.append(s_sub)
+            if len(set(sub_labels)) >= 2 and not long_data_found:
                 has_sub_header = True
 
     data_start_row = (header_row + 2) if has_sub_header else (header_row + 1)
@@ -265,14 +274,32 @@ def analyze_sheet(ws: Worksheet, sheet_index: int) -> SheetAnalysis:
         if c_type == "requirement" and req_col is None:
             req_col = col_idx
 
-    # If no explicit requirement column detected, pick first text column after index
+    # If no explicit requirement column detected, pick first candidate text column
     if req_col is None:
+        candidate_cols: list[int] = []
         for col_idx in sorted(raw_headers.keys()):
-            if col_types.get(col_idx) not in ("index", "compliance", "marks", "remarks"):
-                req_col = col_idx
-                break
-    if req_col is None:
-        req_col = 1
+            if col_types.get(col_idx) not in ("index", "compliance", "marks", "total_marks", "remarks", "answer"):
+                candidate_cols.append(col_idx)
+
+        if len(candidate_cols) == 1:
+            req_col = candidate_cols[0]
+        elif len(candidate_cols) > 1:
+            # Pick candidate column with longest average text length in first 20 data rows
+            best_col = candidate_cols[0]
+            max_avg_len = -1.0
+            for c in candidate_cols:
+                lengths: list[int] = []
+                for r_scan in range(data_start_row, min(data_start_row + 20, max_r + 1)):
+                    v = get_merged_cell_value(ws, r_scan, c)
+                    if v is not None and isinstance(v, str):
+                        lengths.append(len(v.strip()))
+                avg_len = (sum(lengths) / len(lengths)) if lengths else 0.0
+                if avg_len > max_avg_len:
+                    max_avg_len = avg_len
+                    best_col = c
+            req_col = best_col
+        else:
+            req_col = 1
 
     # Extract Requirements & Fillable Target Slots
     parsed_reqs: list[ParsedRequirement] = []
@@ -287,24 +314,39 @@ def analyze_sheet(ws: Worksheet, sheet_index: int) -> SheetAnalysis:
 
         distinct_non_empty = set(non_empty)
 
-        # Check for section banner row (merged across columns or explicit section heading)
+        # Check for section banner row (merged across columns or explicit section heading outside req_col)
         # Note: Do NOT mistake an unfilled requirement row (where target slots are empty) for a banner!
         is_merged_banner = any(
-            rng.min_row <= r <= rng.max_row and (rng.max_col - rng.min_col >= 1)
+            rng.min_row <= r <= rng.max_row and (rng.max_col - rng.min_col >= 2)
             for rng in ws.merged_cells.ranges
         )
+        val_in_req_col = get_merged_cell_value(ws, r, req_col)
+
         if len(distinct_non_empty) == 1 and not any(isinstance(v, (int, float)) for v in non_empty):
             banner_val = str(next(iter(distinct_non_empty))).strip()
-            is_explicit_section_title = bool(
-                re.match(r"^(?:section|part|category|annex|appendix|module|clause)\s+[\d\w\.]+", banner_val, re.IGNORECASE)
-                or (re.match(r"^\d+(\.\d+)+\s+[A-Za-z]", banner_val) and len(banner_val) < 80)
+            is_section_keyword = bool(
+                re.match(r"^(?:section|part|category|annex|appendix|module|clause)\b", banner_val, re.IGNORECASE)
             )
-            val_in_req_col = get_merged_cell_value(ws, r, req_col)
-            # It is a section banner if merged across columns OR text is not in req_col OR matches explicit section header pattern
-            if (is_merged_banner or val_in_req_col is None or is_explicit_section_title) and not banner_val.endswith("?"):
+            has_spec_verbs = bool(
+                re.search(r"\b(?:must|shall|should|require|required|minimum|delivers?|supports?|provides?|includes?)\b", banner_val, re.IGNORECASE)
+            )
+
+            # Classify as banner if:
+            # 1. Row is merged across multiple columns without spec verbs, OR
+            # 2. Text is NOT in requirement column and is concise/section-like, OR
+            # 3. Explicit section keyword without spec verbs
+            is_banner = False
+            if is_merged_banner and not has_spec_verbs and not banner_val.endswith("?"):
+                is_banner = True
+            elif val_in_req_col is None and (is_section_keyword or len(banner_val) < 60) and not banner_val.endswith("?"):
+                is_banner = True
+            elif is_section_keyword and not has_spec_verbs and len(banner_val) < 80 and not banner_val.endswith("?"):
+                is_banner = True
+
+            if is_banner:
                 if len(banner_val) > 2:
                     current_section = banner_val
-                    continue
+                continue
 
         req_text_val = get_merged_cell_value(ws, r, req_col)
         req_text = str(req_text_val).strip() if req_text_val is not None else ""
@@ -317,8 +359,15 @@ def analyze_sheet(ws: Worksheet, sheet_index: int) -> SheetAnalysis:
         for c in range(1, max_c + 1):
             c_type = col_types.get(c, "unknown")
             if c_type in ("compliance", "answer", "remarks", "marks"):
+                raw_cell = ws.cell(row=r, column=c)
                 val = get_merged_cell_value(ws, r, c)
                 val_str = str(val).strip() if val is not None else None
+
+                # Check if cell contains an existing Excel formula (e.g. =IF(...) in marks column)
+                raw_val = raw_cell.value
+                has_formula = isinstance(raw_val, str) and raw_val.startswith("=")
+                formula_str = raw_val if has_formula and isinstance(raw_val, str) else None
+
                 slot_key = c_type if c_type not in target_slots else f"{c_type}_{c}"
                 target_slots[slot_key] = {
                     "slot_type": c_type,
@@ -326,6 +375,8 @@ def analyze_sheet(ws: Worksheet, sheet_index: int) -> SheetAnalysis:
                     "column_index": c,
                     "cell_coordinate": f"{get_column_letter(c)}{r}",
                     "current_value": val_str,
+                    "has_formula": has_formula,
+                    "formula": formula_str,
                 }
 
         req_id = f"REQ-S{sheet_index:02d}-R{req_counter:03d}"
@@ -366,6 +417,8 @@ def parse_excel_workbook(excel_path: Path) -> WorkbookAnalysis:
 
     for idx, name in enumerate(wb.sheetnames, start=1):
         ws = wb[name]
+        if not isinstance(ws, Worksheet):
+            continue
         sheet_result = analyze_sheet(ws, idx)
         sheet_analyses.append(sheet_result)
         total_reqs += len(sheet_result["requirements"])

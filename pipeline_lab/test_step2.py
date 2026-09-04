@@ -193,3 +193,164 @@ def test_export_questions_list(sample_rfp_excel: Path) -> None:
     assert any("512GB" in t for t in texts)
     assert any("350 TB" in t for t in texts)
     assert any("Fibre Channel" in t for t in texts)
+
+
+def test_numbered_requirement_not_discarded_as_section_banner(tmp_path: Path) -> None:
+    """
+    Edge Case: Unfilled row with numbered specification (e.g. '1.1 Server must support 64GB')
+    must NOT be misclassified as a Section Banner and discarded.
+    """
+    excel_path = tmp_path / "numbered_req.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Specs"
+
+    # Header Row
+    ws["A1"] = "Item"
+    ws["B1"] = "Specification Details"
+    ws["C1"] = "Compliance (Yes/No)"
+    ws["D1"] = "Remarks"
+
+    # Row 2: Numbered requirement in Col B with empty slots in C & D
+    ws["A2"] = None
+    ws["B2"] = "1.1 Server must support redundant hot-swap power supplies"
+    ws["C2"] = None
+    ws["D2"] = None
+
+    # Row 3: Standard requirement
+    ws["A3"] = "1.2"
+    ws["B3"] = "2x 10GbE SFP+ Network Interface Ports"
+    ws["C3"] = None
+    ws["D3"] = None
+
+    wb.save(excel_path)
+    wb.close()
+
+    analysis = parse_excel_workbook(excel_path)
+    assert analysis["total_requirements"] == 2
+    req_texts = [r["requirement_text"] for r in analysis["sheets"][0]["requirements"]]
+    assert "1.1 Server must support redundant hot-swap power supplies" in req_texts
+    assert "2x 10GbE SFP+ Network Interface Ports" in req_texts
+
+
+def test_deep_header_row_detection(tmp_path: Path) -> None:
+    """
+    Edge Case: Tender instructions pushing the header row down to row 18.
+    Ensures scanner does not give up after row 15.
+    """
+    excel_path = tmp_path / "deep_header.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Preamble"
+
+    # Rows 1-17: Instructions and procurement notes
+    for r in range(1, 18):
+        ws[f"A{r}"] = f"General Instruction Note Paragraph {r}"
+
+    # Row 18: Actual Table Header
+    ws["A18"] = "Clause No"
+    ws["B18"] = "Technical Requirements"
+    ws["C18"] = "Compliance Status"
+
+    # Row 19: Data row
+    ws["A19"] = "C-01"
+    ws["B19"] = "Minimum 128GB DDR5 ECC Registered Memory"
+    ws["C19"] = None
+
+    wb.save(excel_path)
+    wb.close()
+
+    analysis = parse_excel_workbook(excel_path)
+    s = analysis["sheets"][0]
+    assert s["header_row"] == 18
+    assert s["data_start_row"] == 19
+    assert len(s["requirements"]) == 1
+    assert "128GB DDR5" in s["requirements"][0]["requirement_text"]
+
+
+def test_verbose_column_headers(tmp_path: Path) -> None:
+    """
+    Edge Case: Column header text longer than 50 characters (e.g. 68 chars)
+    must not be ignored when discovering table headers.
+    """
+    excel_path = tmp_path / "verbose_headers.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Evaluation"
+
+    ws["A1"] = "S.No"
+    ws["B1"] = "Detailed Technical Specifications & Minimum Hardware Requirements"
+    ws["C1"] = "Bidder Proposed Specifications & Compliance Status"
+
+    ws["A2"] = 1
+    ws["B2"] = "Support for OpenFlow 1.3 and BGP EVPN VxLAN"
+    ws["C2"] = None
+
+    wb.save(excel_path)
+    wb.close()
+
+    analysis = parse_excel_workbook(excel_path)
+    s = analysis["sheets"][0]
+    assert s["header_row"] == 1
+    assert len(s["requirements"]) == 1
+    assert "OpenFlow" in s["requirements"][0]["requirement_text"]
+
+
+def test_formula_preservation_in_target_slots(tmp_path: Path) -> None:
+    """
+    Edge Case: Target cell containing an Excel formula must have has_formula=True
+    and preserve the formula string so downstream writer does not blindly overwrite it.
+    """
+    excel_path = tmp_path / "formula_slots.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Scoring"
+
+    ws["A1"] = "Item"
+    ws["B1"] = "Requirement"
+    ws["C1"] = "Compliance (Yes/No)"
+    ws["D1"] = "Marks"
+
+    ws["A2"] = 1
+    ws["B2"] = "Enterprise NVMe SSD with 1 DWPD endurance"
+    ws["C2"] = "Yes"
+    ws["D2"] = '=IF(C2="Yes", 10, 0)'  # Formula cell
+
+    wb.save(excel_path)
+    wb.close()
+
+    analysis = parse_excel_workbook(excel_path)
+    slots = analysis["sheets"][0]["requirements"][0]["target_slots"]
+    assert "marks" in slots
+    assert slots["marks"]["has_formula"] is True
+    assert slots["marks"]["formula"] == '=IF(C2="Yes", 10, 0)'
+
+
+def test_category_vs_specification_column_selection(tmp_path: Path) -> None:
+    """
+    Edge Case: Unclassified 'Category' column before 'Specification Details'.
+    Must correctly identify 'Specification Details' as the requirement column.
+    """
+    excel_path = tmp_path / "category_col.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Specs"
+
+    ws["A1"] = "Item"
+    ws["B1"] = "Category"  # Short text
+    ws["C1"] = "Specification Details"  # Long requirement text
+    ws["D1"] = "Compliance"
+
+    ws["A2"] = 1
+    ws["B2"] = "Compute"
+    ws["C2"] = "Dual 4th Gen AMD EPYC Processors with minimum 64 cores per socket"
+    ws["D2"] = None
+
+    wb.save(excel_path)
+    wb.close()
+
+    analysis = parse_excel_workbook(excel_path)
+    req = analysis["sheets"][0]["requirements"][0]
+    assert "AMD EPYC" in req["requirement_text"]
+    assert req["requirement_text"] != "Compute"
+

@@ -116,9 +116,9 @@ def extract_pdf(pdf_path: Path, enable_ocr: bool = True) -> NormalizedDocument:
                     "name": str(img.get("name", f"img_{img_idx}")),
                 })
 
-            # 4. OCR on image-heavy pages (PRD Section 10)
+            # 4. OCR on image-heavy and scanned pages (PRD Section 10)
             ocr_text_list: list[str] = []
-            if ocr_ready and len(clean_text) < 50 and len(extracted_images) > 0:
+            if ocr_ready and len(clean_text) < 50:
                 try:
                     # Render page at 200 DPI for high-accuracy local OCR
                     page_img = page.to_image(resolution=200).original
@@ -128,10 +128,13 @@ def extract_pdf(pdf_path: Path, enable_ocr: bool = True) -> NormalizedDocument:
                 except Exception as err:
                     print(f"  [WARN] OCR failed on page {page_idx}: {err}")
 
+            # If native text is absent/minimal, promote OCR text for primary searchability
+            primary_text = clean_text if len(clean_text) >= 50 else ("\n\n".join(ocr_text_list).strip() or clean_text)
+
             # 5. Assemble Page Representation (PRD Section 12)
             pages_data.append({
                 "page_number": page_idx,
-                "text": clean_text,
+                "text": primary_text,
                 "tables": structured_tables,
                 "images": extracted_images,
                 "ocr": ocr_text_list,

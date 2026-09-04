@@ -6,8 +6,10 @@ Validates adherence to PRD Sections 6, 7, 8, and 12 on reference PDFs.
 
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
+import step1_extract_pdf
 from step1_extract_pdf import extract_pdf
 from validate_extraction import validate
 
@@ -119,3 +121,38 @@ def test_synonym_and_alternative_probing(sample_pdf_path: Path, tmp_path: Path) 
     assert res_xeon["match_type"] == "ALTERNATIVE_FOUND"
     assert res_xeon["found"] is False  # Rule 7 zero hallucination preserved
     assert "Xeon" in res_xeon["evidence_note"]
+
+
+def test_scanned_page_ocr_trigger_without_image_objects(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """
+    Edge Case: Scanned pages without embedded raster images (images=[])
+    must still trigger OCR and promote extracted OCR text to primary text.
+    """
+    dummy_pdf = tmp_path / "dummy_scan.pdf"
+    dummy_pdf.write_bytes(b"%PDF-1.4 dummy")
+
+    # Mock OCR availability
+    monkeypatch.setattr(step1_extract_pdf, "is_ocr_available", lambda: True)
+
+    # Mock pytesseract.image_to_string
+    mock_ocr_output = "SCANNED SPECIFICATION: DUAL REDUNDANT 1200W POWER SUPPLY"
+    monkeypatch.setattr(step1_extract_pdf.pytesseract, "image_to_string", lambda img: mock_ocr_output)
+
+    # Mock pdfplumber page
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = ""  # No native text
+    mock_page.extract_tables.return_value = []
+    mock_page.images = []  # No image objects embedded
+    mock_page.to_image.return_value.original = MagicMock()
+
+    mock_pdf = MagicMock()
+    mock_pdf.pages = [mock_page]
+    mock_pdf.__enter__.return_value = mock_pdf
+
+    monkeypatch.setattr(step1_extract_pdf.pdfplumber, "open", lambda p: mock_pdf)
+
+    doc = step1_extract_pdf.extract_pdf(dummy_pdf, enable_ocr=True)
+    assert doc["total_pages"] == 1
+    page = doc["pages"][0]
+    assert mock_ocr_output in page["ocr"]
+    assert mock_ocr_output == page["text"]  # Promoted for downstream searchability
