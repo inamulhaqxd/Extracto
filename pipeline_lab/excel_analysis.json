@@ -1,0 +1,449 @@
+{
+  "workbook_id": "VERYHIGH_bgp_qos_capacity_spec_questions",
+  "source_file": "C:\\Users\\Inam\\OneDrive\\Desktop\\tender\\testworkflowfile\\VERYHIGH_bgp_qos_capacity_spec_questions.xlsx",
+  "file_hash": "7b77b0c969cd9de1",
+  "sheet_names": [
+    "Extraction"
+  ],
+  "sheets": [
+    {
+      "sheet_name": "Extraction",
+      "sheet_index": 1,
+      "max_row": 20,
+      "max_column": 3,
+      "header_row": 3,
+      "data_start_row": 4,
+      "columns": [
+        {
+          "column_index": 1,
+          "column_letter": "A",
+          "header_name": "Question",
+          "column_type": "requirement"
+        },
+        {
+          "column_index": 2,
+          "column_letter": "B",
+          "header_name": "AI Answer",
+          "column_type": "answer"
+        },
+        {
+          "column_index": 3,
+          "column_letter": "C",
+          "header_name": "Source Section",
+          "column_type": "remarks"
+        }
+      ],
+      "requirements": [
+        {
+          "requirement_id": "REQ-S01-R001",
+          "sheet_name": "Extraction",
+          "row_number": 4,
+          "section": null,
+          "requirement_text": "What local-preference value is set for UpstreamA, and does UpstreamC use the same value?",
+          "source_cell": "A4",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B4",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C4",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R002",
+          "sheet_name": "Extraction",
+          "row_number": 5,
+          "section": null,
+          "requirement_text": "Compare the community tags set in UpstreamA's and UpstreamC's route-maps. Are they the same?",
+          "source_cell": "A5",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B5",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C5",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R003",
+          "sheet_name": "Extraction",
+          "row_number": 6,
+          "section": null,
+          "requirement_text": "If a route matches both an IX condition and a customer condition, which community tag wins, and why?",
+          "source_cell": "A6",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B6",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C6",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R004",
+          "sheet_name": "Extraction",
+          "row_number": 7,
+          "section": null,
+          "requirement_text": "What percentage of interface bandwidth is guaranteed to Business-Critical traffic under the QoS policy?",
+          "source_cell": "A7",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B7",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C7",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R005",
+          "sheet_name": "Extraction",
+          "row_number": 8,
+          "section": null,
+          "requirement_text": "What happens to traffic that arrives with no recognized DSCP marking?",
+          "source_cell": "A8",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B8",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C8",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R006",
+          "sheet_name": "Extraction",
+          "row_number": 9,
+          "section": null,
+          "requirement_text": "Using the capacity formula, calculate the Required_Mbps for EDGE-2 given its peak concurrent users.",
+          "source_cell": "A9",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B9",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C9",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R007",
+          "sheet_name": "Extraction",
+          "row_number": 10,
+          "section": null,
+          "requirement_text": "Using the headroom formula and your EDGE-2 calculation above, what is EDGE-2's headroom percentage?",
+          "source_cell": "A10",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B10",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C10",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R008",
+          "sheet_name": "Extraction",
+          "row_number": 11,
+          "section": null,
+          "requirement_text": "Based on that headroom percentage, does EDGE-2 need to be flagged for a capacity upgrade? Why?",
+          "source_cell": "A11",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B11",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C11",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R009",
+          "sheet_name": "Extraction",
+          "row_number": 12,
+          "section": null,
+          "requirement_text": "Repeat the same Required_Mbps and headroom calculation for EDGE-3. Does EDGE-3 need a capacity upgrade?",
+          "source_cell": "A12",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B12",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C12",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R010",
+          "sheet_name": "Extraction",
+          "row_number": 13,
+          "section": null,
+          "requirement_text": "Which peers are located at EDGE-3, and what session types are they?",
+          "source_cell": "A13",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B13",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C13",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R011",
+          "sheet_name": "Extraction",
+          "row_number": 14,
+          "section": null,
+          "requirement_text": "If IX-PeerZ shows 'Hold Timer Expired', what is the typical cause and recommended action per the troubleshooting table?",
+          "source_cell": "A14",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B14",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C14",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R012",
+          "sheet_name": "Extraction",
+          "row_number": 15,
+          "section": null,
+          "requirement_text": "If CustomerW shows 'Max Prefix Limit Exceeded', what is the recommended action, and how does it differ from the same error on a transit session?",
+          "source_cell": "A15",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B15",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C15",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R013",
+          "sheet_name": "Extraction",
+          "row_number": 16,
+          "section": null,
+          "requirement_text": "What is the maximum prefix limit for UpstreamC, and which site is it located at?",
+          "source_cell": "A16",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B16",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C16",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R014",
+          "sheet_name": "Extraction",
+          "row_number": 17,
+          "section": null,
+          "requirement_text": "Between UpstreamA and UpstreamC, which one has a higher local-preference, and what does that suggest about traffic preference between the two?",
+          "source_cell": "A17",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B17",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C17",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R015",
+          "sheet_name": "Extraction",
+          "row_number": 18,
+          "section": null,
+          "requirement_text": "How many total peers are configured across all three edge sites?",
+          "source_cell": "A18",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B18",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C18",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R016",
+          "sheet_name": "Extraction",
+          "row_number": 19,
+          "section": null,
+          "requirement_text": "What is the current CPU load on the EDGE-2 router?",
+          "source_cell": "A19",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B19",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C19",
+              "current_value": null
+            }
+          }
+        },
+        {
+          "requirement_id": "REQ-S01-R017",
+          "sheet_name": "Extraction",
+          "row_number": 20,
+          "section": null,
+          "requirement_text": "What percentage of Voice traffic bandwidth is allowed under strict-priority queuing?",
+          "source_cell": "A20",
+          "target_slots": {
+            "answer": {
+              "slot_type": "answer",
+              "column_letter": "B",
+              "column_index": 2,
+              "cell_coordinate": "B20",
+              "current_value": null
+            },
+            "remarks": {
+              "slot_type": "remarks",
+              "column_letter": "C",
+              "column_index": 3,
+              "cell_coordinate": "C20",
+              "current_value": null
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "total_requirements": 17
+}

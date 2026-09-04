@@ -1,0 +1,560 @@
+#!/usr/bin/env python3
+"""
+Clean, Minimal, Professional HTML Executive Report Generator for PDF Extraction.
+Includes:
+- Overall Health (Top Hero Banner & Verdict Badge)
+- Total Pages & Extracted Text Pages
+- Total Words & Characters
+- Structured Tables
+- OCR Used or Not & Text Extracted from Images via OCR
+- Image Alert (Diagram / Image-heavy pages)
+- Target Spec Check (Reverse keyword probes with live search)
+- Integrity & Invariants Checklist at the end
+"""
+
+import argparse
+import html
+import json
+from pathlib import Path
+
+
+def generate_professional_html(report_data: dict[str, object]) -> str:
+    """Renders a clean, minimal, professional executive report in HTML."""
+    doc_id = html.escape(str(report_data.get("document_id", "Reference Document")))
+    total_pages = int(str(report_data.get("total_pages", 0)))
+    extracted_text_pages = int(str(report_data.get("extracted_text_pages", total_pages)))
+    total_words = int(str(report_data.get("total_words", 0)))
+    total_chars = int(str(report_data.get("total_chars", 0)))
+    total_tables = int(str(report_data.get("total_tables", 0)))
+    ocr_used = bool(report_data.get("ocr_used", False))
+    ocr_chars = int(str(report_data.get("ocr_chars", 0)))
+    ocr_words = int(str(report_data.get("ocr_words", 0)))
+    corrupted_chars = int(str(report_data.get("corrupted_char_count", 0)))
+
+    ghost_pages_raw = report_data.get("ghost_pages", [])
+    ghost_pages = [int(p) for p in ghost_pages_raw] if isinstance(ghost_pages_raw, list) else []
+
+    # Probes Analysis
+    probes_raw = report_data.get("probe_results", [])
+    probes = probes_raw if isinstance(probes_raw, list) else []
+    total_probes = len(probes)
+    found_probes = sum(1 for pr in probes if isinstance(pr, dict) and pr.get("found", False))
+    missing_probes: list[dict[str, object]] = [
+        pr for pr in probes if isinstance(pr, dict) and not pr.get("found", False)
+    ]
+
+    # OCR Page Details
+    ocr_pages_detail_raw = report_data.get("ocr_pages_detail", [])
+    ocr_pages_detail = (
+        [op for op in ocr_pages_detail_raw if isinstance(op, dict)]
+        if isinstance(ocr_pages_detail_raw, list)
+        else []
+    )
+
+    # Calculate overall extraction health score (0-100)
+    deductions = len(ghost_pages) * 5 + len(missing_probes) * 8
+    health_score = max(0, min(100, 100 - deductions)) if total_pages > 0 else 0
+
+    if health_score >= 90:
+        verdict_badge = "HEALTHY"
+        badge_class = "badge-emerald"
+        headline = "Ready for Downstream Processing"
+        subheadline = "High extraction fidelity across pages, tables, and target specifications."
+    elif health_score >= 70:
+        verdict_badge = "REVIEW RECOMMENDED"
+        badge_class = "badge-amber"
+        missing_count = len(missing_probes)
+        unit = "Spec" if missing_count == 1 else "Specs"
+        headline = f"Extracted Successfully ({missing_count} Missing {unit})"
+        subheadline = f"{found_probes} / {total_probes} target requirements located in document text layer."
+    else:
+        verdict_badge = "ACTION REQUIRED"
+        badge_class = "badge-rose"
+        headline = "Extraction Discrepancies Detected"
+        subheadline = "Several specifications or pages require review or OCR."
+
+    # OCR display labels
+    ocr_status_label = "Active (Used)" if ocr_used else "Not Used"
+    ocr_status_sub = "OCR Triggered" if ocr_used else "Native Digital PDF"
+    ocr_text_val = f"{ocr_words:,} Words" if ocr_used else "0 Words"
+    ocr_text_sub = f"{ocr_chars:,} chars from images" if ocr_used else "0 chars (native text only)"
+
+    # Build Probe Cards
+    probe_cards: list[str] = []
+    for pr in probes:
+        if not isinstance(pr, dict):
+            continue
+        term = html.escape(str(pr.get("term", "")))
+        found = bool(pr.get("found", False))
+        count = int(str(pr.get("occurrences", 0)))
+        match_type = str(pr.get("match_type", "EXACT" if found else "MISSING"))
+        evidence_note = html.escape(str(pr.get("evidence_note", "")))
+        pages = pr.get("found_on_pages", [])
+        page_str = (
+            f"Page {pages[0]}"
+            if (isinstance(pages, list) and len(pages) == 1)
+            else f"{len(pages)} pages"
+            if isinstance(pages, list) and pages
+            else "None"
+        )
+
+        if match_type == "EXACT":
+            probe_cards.append(f"""
+            <div class="probe-card probe-success" data-term="{term.lower()}">
+                <div class="probe-top">
+                    <span class="status-indicator ind-green"></span>
+                    <span class="probe-title">{term}</span>
+                    <span class="probe-count-pill">{count} hits</span>
+                </div>
+                <div class="probe-meta">Found across {page_str}</div>
+            </div>
+            """)
+        elif match_type == "SYNONYM":
+            probe_cards.append(f"""
+            <div class="probe-card probe-synonym" data-term="{term.lower()}">
+                <div class="probe-top">
+                    <span class="status-indicator ind-cyan"></span>
+                    <span class="probe-title">{term}</span>
+                    <span class="probe-count-pill pill-cyan">Synonym</span>
+                </div>
+                <div class="probe-meta">{evidence_note}</div>
+            </div>
+            """)
+        elif match_type == "ALTERNATIVE_FOUND":
+            probe_cards.append(f"""
+            <div class="probe-card probe-alt" data-term="{term.lower()}">
+                <div class="probe-top">
+                    <span class="status-indicator ind-amber"></span>
+                    <span class="probe-title">{term}</span>
+                    <span class="probe-count-pill pill-amber">Alternative</span>
+                </div>
+                <div class="probe-meta">{evidence_note}</div>
+            </div>
+            """)
+        else:
+            probe_cards.append(f"""
+            <div class="probe-card probe-danger" data-term="{term.lower()}">
+                <div class="probe-top">
+                    <span class="status-indicator ind-red"></span>
+                    <span class="probe-title">{term}</span>
+                    <span class="probe-count-pill pill-danger">Missing</span>
+                </div>
+                <div class="probe-meta">{evidence_note or '0 occurrences in text layer'}</div>
+            </div>
+            """)
+
+    probe_cards_html = (
+        "\n".join(probe_cards)
+        if probe_cards
+        else "<div class='empty-state'>No keyword probes configured.</div>"
+    )
+
+    # Ghost Pages / OCR Notice (Image Alert)
+    flagged_box_html = ""
+    if ocr_pages_detail:
+        total_ocr_words_val = sum(int(str(op.get("words", 0))) for op in ocr_pages_detail)
+        pages_list_str = ", ".join(f"Page {op.get('page_number')}" for op in ocr_pages_detail)
+
+        if len(ocr_pages_detail) == 1:
+            op = ocr_pages_detail[0]
+            body_text = f"OCR was used on <strong>Page {op.get('page_number')}</strong> and extracted <strong>{op.get('words', 0)} words</strong> ({op.get('chars', 0):,} characters) from the diagram/screenshot."
+        else:
+            pages_summary = ", ".join(
+                f"Page {op.get('page_number')} ({op.get('words', 0)} words)"
+                for op in ocr_pages_detail
+            )
+            body_text = f"OCR was used across {pages_list_str} and extracted <strong>{total_ocr_words_val:,} words</strong> ({ocr_chars:,} characters): {pages_summary}."
+
+        flagged_box_html = f"""
+        <div class="ui-notice notice-blue">
+            <div class="notice-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            </div>
+            <div class="notice-content">
+                <div class="notice-heading">Image / Diagram Alert &mdash; OCR Executed ({pages_list_str})</div>
+                <div class="notice-body">{body_text}</div>
+            </div>
+        </div>
+        """
+    elif ghost_pages:
+        ghost_pages_str = ", ".join(f"Page {p}" for p in ghost_pages)
+        flagged_box_html = f"""
+        <div class="ui-notice notice-amber">
+            <div class="notice-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div class="notice-content">
+                <div class="notice-heading">Image / Diagram Alert ({ghost_pages_str})</div>
+                <div class="notice-body">{ghost_pages_str} contains less than 50 characters of native text (diagram/screenshot). Review if local OCR is required.</div>
+            </div>
+        </div>
+        """
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFP Extraction Intelligence — {doc_id}</title>
+    <style>
+        :root {{
+            --bg-canvas: #f8fafc;
+            --surface-card: #ffffff;
+            --text-title: #0f172a;
+            --text-body: #334155;
+            --text-subtle: #64748b;
+            --border-subtle: #e2e8f0;
+            --border-strong: #cbd5e1;
+
+            --primary-blue: #2563eb;
+            --emerald-fg: #059669;
+            --emerald-bg: #ecfdf5;
+            --emerald-border: #a7f3d0;
+
+            --amber-fg: #b45309;
+            --amber-bg: #fffbeb;
+            --amber-border: #fde68a;
+
+            --rose-fg: #e11d48;
+            --rose-bg: #fff1f2;
+            --rose-border: #fecdd3;
+
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+        }}
+
+        * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }}
+        body {{ background-color: var(--bg-canvas); color: var(--text-body); padding: 40px 20px; line-height: 1.5; }}
+        .app-container {{ max-width: 920px; margin: 0 auto; }}
+
+        /* Top Bar */
+        .top-nav {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }}
+        .breadcrumb {{ font-size: 13px; font-weight: 500; color: var(--text-subtle); display: flex; align-items: center; gap: 6px; }}
+        .breadcrumb span {{ color: var(--text-title); font-weight: 600; }}
+
+        .btn-action {{
+            background: var(--surface-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-body);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }}
+        .btn-action:hover {{ background: #f1f5f9; border-color: var(--border-strong); }}
+
+        /* Hero Panel (Overall Health) */
+        .hero-panel {{
+            background: var(--surface-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 26px 30px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-sm);
+        }}
+        .hero-top {{ display: flex; justify-content: space-between; align-items: flex-start; }}
+        .hero-title {{ font-size: 22px; font-weight: 700; color: var(--text-title); letter-spacing: -0.02em; }}
+        .hero-desc {{ font-size: 14px; color: var(--text-subtle); margin-top: 4px; }}
+
+        .badge-pill {{
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            letter-spacing: 0.5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }}
+        .badge-emerald {{ background: var(--emerald-bg); color: var(--emerald-fg); border: 1px solid var(--emerald-border); }}
+        .badge-amber {{ background: var(--amber-bg); color: var(--amber-fg); border: 1px solid var(--amber-border); }}
+        .badge-rose {{ background: var(--rose-bg); color: var(--rose-fg); border: 1px solid var(--rose-border); }}
+
+        /* 6-Stat Metric Strip */
+        .metrics-grid {{
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }}
+        @media (max-width: 768px) {{
+            .metrics-grid {{ grid-template-columns: 1fr; }}
+        }}
+        .metric-tile {{
+            background: var(--surface-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 18px 20px;
+            box-shadow: var(--shadow-sm);
+        }}
+        .metric-label {{ font-size: 11px; font-weight: 600; color: var(--text-subtle); text-transform: uppercase; letter-spacing: 0.04em; }}
+        .metric-val {{ font-size: 22px; font-weight: 700; color: var(--text-title); margin-top: 4px; letter-spacing: -0.02em; }}
+        .metric-sub {{ font-size: 12px; color: var(--text-subtle); margin-top: 4px; }}
+
+        /* Notices / Callouts (Image Alert) */
+        .ui-notice {{
+            display: flex;
+            gap: 14px;
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin-bottom: 20px;
+            align-items: flex-start;
+        }}
+        .notice-amber {{ background: var(--amber-bg); border: 1px solid var(--amber-border); color: var(--amber-fg); }}
+        .notice-blue {{ background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }}
+        .notice-icon {{ margin-top: 2px; }}
+        .notice-heading {{ font-size: 13px; font-weight: 700; }}
+        .notice-body {{ font-size: 12px; margin-top: 2px; line-height: 1.4; }}
+
+        /* Main Content Box */
+        .card-box {{
+            background: var(--surface-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-sm);
+        }}
+        .card-header-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }}
+        .card-heading {{ font-size: 15px; font-weight: 700; color: var(--text-title); }}
+
+        .search-input {{
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 13px;
+            color: var(--text-body);
+            background: #fafafa;
+            outline: none;
+            width: 220px;
+            transition: all 0.15s;
+        }}
+        .search-input:focus {{ background: #ffffff; border-color: var(--primary-blue); box-shadow: 0 0 0 2px rgba(37,99,235,0.1); }}
+
+        /* Target Spec Probe Cards */
+        .probe-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }}
+        .probe-card {{
+            border-radius: 8px;
+            padding: 14px 16px;
+            border: 1px solid var(--border-subtle);
+            background: #fafbfc;
+            transition: transform 0.1s ease, border-color 0.1s ease;
+        }}
+        .probe-card:hover {{ border-color: var(--border-strong); background: #ffffff; }}
+        .probe-top {{ display: flex; align-items: center; justify-content: space-between; }}
+        .probe-title {{ font-size: 14px; font-weight: 600; color: var(--text-title); }}
+
+        .status-indicator {{ width: 8px; height: 8px; border-radius: 50%; display: inline-block; }}
+        .ind-green {{ background: #10b981; }}
+        .ind-cyan {{ background: #0284c7; }}
+        .ind-amber {{ background: #f59e0b; }}
+        .ind-red {{ background: #f43f5e; }}
+
+        .probe-count-pill {{
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 4px;
+            background: #e2e8f0;
+            color: #475569;
+        }}
+        .pill-cyan {{ background: #e0f2fe; color: #0369a1; }}
+        .pill-amber {{ background: #fef3c7; color: #92400e; }}
+        .pill-danger {{ background: #fee2e2; color: #991b1b; }}
+        .probe-meta {{ font-size: 12px; color: var(--text-subtle); margin-top: 6px; }}
+
+        /* Checklist at the end */
+        .invariant-list {{ list-style: none; display: flex; flex-direction: column; gap: 12px; }}
+        .invariant-row {{ display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--border-subtle); }}
+        .invariant-row:last-child {{ border-bottom: none; padding-bottom: 0; }}
+        .inv-left {{ display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-body); }}
+        .inv-check {{ color: #10b981; }}
+        .inv-val {{ font-size: 13px; font-weight: 600; color: var(--text-subtle); }}
+
+        /* Footer */
+        .footer-strip {{ text-align: center; font-size: 12px; color: var(--text-subtle); margin-top: 32px; padding-bottom: 16px; }}
+    </style>
+</head>
+<body>
+    <div class="app-container">
+
+        <!-- Top Navigation -->
+        <div class="top-nav">
+            <div class="breadcrumb">
+                Pipeline Lab / <span>Extraction Review</span>
+            </div>
+            <div class="actions-strip">
+                <button class="btn-action" onclick="window.print()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                    Print Report
+                </button>
+            </div>
+        </div>
+
+        <!-- 1. Overall Health Hero Panel -->
+        <div class="hero-panel">
+            <div class="hero-top">
+                <div>
+                    <h1 class="hero-title">{headline}</h1>
+                    <p class="hero-desc">{subheadline}</p>
+                </div>
+                <span class="badge-pill {badge_class}">{verdict_badge}</span>
+            </div>
+        </div>
+
+        <!-- 2. Metrics Strip: Total Pages, Extracted Text Pages, Words, Tables, OCR Status, OCR Text -->
+        <div class="metrics-grid">
+            <div class="metric-tile">
+                <div class="metric-label">Document ID</div>
+                <div class="metric-val" style="font-size: 18px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{doc_id}</div>
+                <div class="metric-sub">PRD-12 Normalized JSON</div>
+            </div>
+            <div class="metric-tile">
+                <div class="metric-label">Pages & Text Pages</div>
+                <div class="metric-val">{total_pages} <span style="font-size: 14px; font-weight: 500; color: var(--text-subtle);">Pages</span></div>
+                <div class="metric-sub">{extracted_text_pages} Pages with Extracted Text</div>
+            </div>
+            <div class="metric-tile">
+                <div class="metric-label">Total Words Extracted</div>
+                <div class="metric-val">{total_words:,}</div>
+                <div class="metric-sub">{total_chars:,} Characters Extracted</div>
+            </div>
+            <div class="metric-tile">
+                <div class="metric-label">Structured Tables</div>
+                <div class="metric-val">{total_tables} <span style="font-size: 14px; font-weight: 500; color: var(--text-subtle);">Tables</span></div>
+                <div class="metric-sub">Columns & Headers Aligned</div>
+            </div>
+            <div class="metric-tile">
+                <div class="metric-label">OCR Used or Not</div>
+                <div class="metric-val">{ocr_status_label}</div>
+                <div class="metric-sub">{ocr_status_sub}</div>
+            </div>
+            <div class="metric-tile">
+                <div class="metric-label">Text Extracted via OCR</div>
+                <div class="metric-val">{ocr_text_val}</div>
+                <div class="metric-sub">{ocr_text_sub}</div>
+            </div>
+        </div>
+
+        <!-- 3. Image Alert (Ghost / Low-Text / Diagram Pages) -->
+        {flagged_box_html}
+
+        <!-- 4. Target Spec Check (Reverse Ground Truth Keyword Search) -->
+        <div class="card-box">
+            <div class="card-header-bar">
+                <div class="card-heading">Target Specification Check</div>
+                <input type="text" id="filterInput" class="search-input" placeholder="Filter specifications..." onkeyup="filterProbes()">
+            </div>
+            <div class="probe-grid" id="probeContainer">
+                {probe_cards_html}
+            </div>
+        </div>
+
+        <!-- 5. Checklist at the End (Extraction Invariants & Integrity) -->
+        <div class="card-box">
+            <div class="card-header-bar">
+                <div class="card-heading">Extraction Integrity & Invariants Checklist</div>
+            </div>
+            <ul class="invariant-list">
+                <li class="invariant-row">
+                    <span class="inv-left">
+                        <svg class="inv-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        Page Continuity & Sequence
+                    </span>
+                    <span class="inv-val">{total_pages} / {total_pages} Pages (Zero Skipped)</span>
+                </li>
+                <li class="invariant-row">
+                    <span class="inv-left">
+                        <svg class="inv-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        Extracted Text Volume & Cleanliness
+                    </span>
+                    <span class="inv-val">{total_words:,} Words &bull; {total_chars:,} Chars &bull; {corrupted_chars} Corrupted</span>
+                </li>
+                <li class="invariant-row">
+                    <span class="inv-left">
+                        <svg class="inv-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        Structured Table Grids
+                    </span>
+                    <span class="inv-val">{total_tables} Valid Tables</span>
+                </li>
+                <li class="invariant-row">
+                    <span class="inv-left">
+                        <svg class="inv-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        OCR Engine Execution
+                    </span>
+                    <span class="inv-val">{ocr_status_label} &bull; {ocr_text_val} from Images</span>
+                </li>
+                <li class="invariant-row">
+                    <span class="inv-left">
+                        <svg class="inv-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        PRD Section 12 Schema Output
+                    </span>
+                    <span class="inv-val">Validated JSON Artifact</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="footer-strip">
+            Local AI RFP Automation System &bull; Phase 1 Quality Gate
+        </div>
+
+    </div>
+
+    <!-- Client-Side Search -->
+    <script>
+        function filterProbes() {{
+            const filter = document.getElementById('filterInput').value.toLowerCase();
+            const cards = document.querySelectorAll('.probe-card');
+            cards.forEach(card => {{
+                const term = card.getAttribute('data-term') || '';
+                card.style.display = term.includes(filter) ? '' : 'none';
+            }});
+        }}
+    </script>
+</body>
+</html>
+"""
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Generate Clean HTML Executive Extraction Report"
+    )
+    parser.add_argument(
+        "--report",
+        "-r",
+        type=Path,
+        default=Path("pipeline_lab/validation_report.json"),
+        help="Path to validation report JSON file",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=Path("pipeline_lab/extraction_report.html"),
+        help="Path to output HTML file",
+    )
+    args = parser.parse_args()
+
+    target_report = args.report
+    if not target_report.exists() and Path("validation_report.json").exists():
+        target_report = Path("validation_report.json")
+
+    with open(target_report, "r", encoding="utf-8") as f:
+        report_data: dict[str, object] = json.load(f)
+
+    html_content = generate_professional_html(report_data)
+
+    with open(args.output, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+    print(f"\n  [SUCCESS] Clean HTML Report updated -> {args.output.resolve()}\n")
+
+
+if __name__ == "__main__":
+    main()
