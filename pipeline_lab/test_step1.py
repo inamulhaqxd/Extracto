@@ -9,9 +9,15 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-import step1_extract_pdf
-from step1_extract_pdf import extract_pdf
-from validate_extraction import validate
+
+try:
+    import pipeline_lab.step1_extract_pdf as step1_extract_pdf
+    from pipeline_lab.step1_extract_pdf import extract_pdf
+    from pipeline_lab.validate_extraction import validate
+except ModuleNotFoundError:
+    import step1_extract_pdf
+    from step1_extract_pdf import extract_pdf
+    from validate_extraction import validate
 
 
 @pytest.fixture

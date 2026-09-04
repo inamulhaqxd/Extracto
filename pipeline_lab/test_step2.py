@@ -14,13 +14,23 @@ from pathlib import Path
 
 import openpyxl
 import pytest
-from step2_parse_excel import (
-    classify_column_header,
-    detect_headers,
-    export_questions_list,
-    get_merged_cell_value,
-    parse_excel_workbook,
-)
+
+try:
+    from pipeline_lab.step2_parse_excel import (
+        classify_column_header,
+        detect_headers,
+        export_questions_list,
+        get_merged_cell_value,
+        parse_excel_workbook,
+    )
+except ModuleNotFoundError:
+    from step2_parse_excel import (  # type: ignore[no-redef]
+        classify_column_header,
+        detect_headers,
+        export_questions_list,
+        get_merged_cell_value,
+        parse_excel_workbook,
+    )
 
 
 @pytest.fixture

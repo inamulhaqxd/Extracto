@@ -60,6 +60,7 @@ ANSWER_KEYWORDS = {
 
 class TargetSlot(TypedDict):
     slot_type: str  # "compliance", "answer", "remarks", "marks"
+    header_name: str
     column_letter: str
     column_index: int
     cell_coordinate: str
@@ -371,6 +372,7 @@ def analyze_sheet(ws: Worksheet, sheet_index: int) -> SheetAnalysis:
                 slot_key = c_type if c_type not in target_slots else f"{c_type}_{c}"
                 target_slots[slot_key] = {
                     "slot_type": c_type,
+                    "header_name": raw_headers.get(c, ""),
                     "column_letter": get_column_letter(c),
                     "column_index": c,
                     "cell_coordinate": f"{get_column_letter(c)}{r}",

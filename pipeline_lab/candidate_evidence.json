@@ -1,0 +1,739 @@
+{
+  "document_id": "MEDIUM_datacenter_power_cooling",
+  "workbook_id": "MEDIUM_datacenter_power_cooling_questions",
+  "total_requirements": 12,
+  "requirements_with_evidence": 12,
+  "items": [
+    {
+      "requirement_id": "REQ-S01-R001",
+      "sheet_name": "Extraction",
+      "row_number": 4,
+      "section": null,
+      "requirement_text": "How many utility power feeds enter the facility, and what redundancy level does this provide?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B4",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C4",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "1. Power Distribution Utility power enters the facility through two independent feeds from separate substations, providing N+1 redundancy at the facility level. Each feed is rated for 2.5 MW. Power passes through automatic transfer switches (ATS) before reaching the uninterruptible power supply (UPS) systems, which provide ride-through power during the transfer window and during the startup of backup generators. Three diesel generators, each rated at 1.2 MW, provide backup power and can sustain full facility load with one generator offline for maintenance (N+1 generator redundancy).",
+          "score": 78.87,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "4. Power Usage Effectiveness (PUE) PUE is calculated as Total Facility Power divided by IT Equipment Power. The facility's measured PUE over the past 12 months averaged 1.35, meaning for every 1 kW consumed by IT equipment, an additional 0.35 kW is consumed by cooling, power distribution losses, and other overhead. The facility's target PUE, set as part of the annual efficiency goal, is 1.25.",
+          "score": 44.42,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "Datacenter Power & Cooling Systems Overview Reference document describing the power distribution and cooling infrastructure across the facility's server halls.",
+          "score": 39.45,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [],
+      "top_page_numbers": [
+        1
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R002",
+      "sheet_name": "Extraction",
+      "row_number": 5,
+      "section": null,
+      "requirement_text": "What is the power rating of each diesel generator?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B5",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C5",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "1. Power Distribution Utility power enters the facility through two independent feeds from separate substations, providing N+1 redundancy at the facility level. Each feed is rated for 2.5 MW. Power passes through automatic transfer switches (ATS) before reaching the uninterruptible power supply (UPS) systems, which provide ride-through power during the transfer window and during the startup of backup generators. Three diesel generators, each rated at 1.2 MW, provide backup power and can sustain full facility load with one generator offline for maintenance (N+1 generator redundancy).",
+          "score": 73.1,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "4. Power Usage Effectiveness (PUE) PUE is calculated as Total Facility Power divided by IT Equipment Power. The facility's measured PUE over the past 12 months averaged 1.35, meaning for every 1 kW consumed by IT equipment, an additional 0.35 kW is consumed by cooling, power distribution losses, and other overhead. The facility's target PUE, set as part of the annual efficiency goal, is 1.25.",
+          "score": 44.0,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "2. UPS Configuration UPS units are configured in a 2N topology per server hall, meaning each hall has two fully independent UPS paths, either of which can carry the full hall load alone. Battery runtime at full load is rated at 12 minutes, sufficient to bridge the approximately 45-second generator startup and transfer window with significant margin.",
+          "score": 41.55,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [],
+      "top_page_numbers": [
+        1
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R003",
+      "sheet_name": "Extraction",
+      "row_number": 6,
+      "section": null,
+      "requirement_text": "What UPS topology is used per server hall, and what does that mean?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B6",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C6",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "2. UPS Configuration UPS units are configured in a 2N topology per server hall, meaning each hall has two fully independent UPS paths, either of which can carry the full hall load alone. Battery runtime at full load is rated at 12 minutes, sufficient to bridge the approximately 45-second generator startup and transfer window with significant margin.",
+          "score": 88.48,
+          "table_id": null,
+          "exact_matches": [
+            "UPS"
+          ]
+        },
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "Generators are load-tested monthly for 30 minutes under simulated facility load. UPS battery health is checked quarterly, with full battery replacement typically required every 5 years. Chiller maintenance follows the manufacturer's schedule of semi-annual service, with the next scheduled service for all three chillers falling in the third week of next month. Hall D's cooling system, being newly commissioned, follows a more frequent monthly inspection schedule for its first year of operation.",
+          "score": 64.13,
+          "table_id": null,
+          "exact_matches": [
+            "UPS"
+          ]
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "1. Power Distribution Utility power enters the facility through two independent feeds from separate substations, providing N+1 redundancy at the facility level. Each feed is rated for 2.5 MW. Power passes through automatic transfer switches (ATS) before reaching the uninterruptible power supply (UPS) systems, which provide ride-through power during the transfer window and during the startup of backup generators. Three diesel generators, each rated at 1.2 MW, provide backup power and can sustain full facility load with one generator offline for maintenance (N+1 generator redundancy).",
+          "score": 59.12,
+          "table_id": null,
+          "exact_matches": [
+            "UPS"
+          ]
+        }
+      ],
+      "deterministic_hits": [
+        "UPS"
+      ],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R004",
+      "sheet_name": "Extraction",
+      "row_number": 7,
+      "section": null,
+      "requirement_text": "What is the battery runtime at full load, and how does it compare to the generator startup time?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B7",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C7",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "2. UPS Configuration UPS units are configured in a 2N topology per server hall, meaning each hall has two fully independent UPS paths, either of which can carry the full hall load alone. Battery runtime at full load is rated at 12 minutes, sufficient to bridge the approximately 45-second generator startup and transfer window with significant margin.",
+          "score": 79.35,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "1. Power Distribution Utility power enters the facility through two independent feeds from separate substations, providing N+1 redundancy at the facility level. Each feed is rated for 2.5 MW. Power passes through automatic transfer switches (ATS) before reaching the uninterruptible power supply (UPS) systems, which provide ride-through power during the transfer window and during the startup of backup generators. Three diesel generators, each rated at 1.2 MW, provide backup power and can sustain full facility load with one generator offline for maintenance (N+1 generator redundancy).",
+          "score": 59.47,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "Generators are load-tested monthly for 30 minutes under simulated facility load. UPS battery health is checked quarterly, with full battery replacement typically required every 5 years. Chiller maintenance follows the manufacturer's schedule of semi-annual service, with the next scheduled service for all three chillers falling in the third week of next month. Hall D's cooling system, being newly commissioned, follows a more frequent monthly inspection schedule for its first year of operation.",
+          "score": 53.43,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R005",
+      "sheet_name": "Extraction",
+      "row_number": 8,
+      "section": null,
+      "requirement_text": "What supply air temperature is maintained by the cooling system?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B8",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C8",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "3. Cooling Systems Cooling is provided by a chilled water system feeding in-row cooling units positioned between server racks. Chilled water is produced by three chillers operating in an N+1 configuration, each rated at 400 tons of cooling capacity. Server halls are arranged in a hot-aisle/cold-aisle containment layout, which improves cooling efficiency by preventing hot and cold air from mixing. Supply air temperature is maintained at 22\u00b0C (72\u00b0F) with a target humidity range of 40-60% relative humidity.",
+          "score": 88.28,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "Generators are load-tested monthly for 30 minutes under simulated facility load. UPS battery health is checked quarterly, with full battery replacement typically required every 5 years. Chiller maintenance follows the manufacturer's schedule of semi-annual service, with the next scheduled service for all three chillers falling in the third week of next month. Hall D's cooling system, being newly commissioned, follows a more frequent monthly inspection schedule for its first year of operation.",
+          "score": 49.45,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "Datacenter Power & Cooling Systems Overview Reference document describing the power distribution and cooling infrastructure across the facility's server halls.",
+          "score": 39.48,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R006",
+      "sheet_name": "Extraction",
+      "row_number": 9,
+      "section": null,
+      "requirement_text": "How is PUE calculated, and what was the facility's average PUE over the last 12 months?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B9",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C9",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "4. Power Usage Effectiveness (PUE) PUE is calculated as Total Facility Power divided by IT Equipment Power. The facility's measured PUE over the past 12 months averaged 1.35, meaning for every 1 kW consumed by IT equipment, an additional 0.35 kW is consumed by cooling, power distribution losses, and other overhead. The facility's target PUE, set as part of the annual efficiency goal, is 1.25.",
+          "score": 89.74,
+          "table_id": null,
+          "exact_matches": [
+            "PUE"
+          ]
+        },
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "Generators are load-tested monthly for 30 minutes under simulated facility load. UPS battery health is checked quarterly, with full battery replacement typically required every 5 years. Chiller maintenance follows the manufacturer's schedule of semi-annual service, with the next scheduled service for all three chillers falling in the third week of next month. Hall D's cooling system, being newly commissioned, follows a more frequent monthly inspection schedule for its first year of operation.",
+          "score": 36.18,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "1. Power Distribution Utility power enters the facility through two independent feeds from separate substations, providing N+1 redundancy at the facility level. Each feed is rated for 2.5 MW. Power passes through automatic transfer switches (ATS) before reaching the uninterruptible power supply (UPS) systems, which provide ride-through power during the transfer window and during the startup of backup generators. Three diesel generators, each rated at 1.2 MW, provide backup power and can sustain full facility load with one generator offline for maintenance (N+1 generator redundancy).",
+          "score": 33.69,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [
+        "PUE"
+      ],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R007",
+      "sheet_name": "Extraction",
+      "row_number": 10,
+      "section": null,
+      "requirement_text": "What is the facility's target PUE, and how far off is the current average from that target?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B10",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C10",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "4. Power Usage Effectiveness (PUE) PUE is calculated as Total Facility Power divided by IT Equipment Power. The facility's measured PUE over the past 12 months averaged 1.35, meaning for every 1 kW consumed by IT equipment, an additional 0.35 kW is consumed by cooling, power distribution losses, and other overhead. The facility's target PUE, set as part of the annual efficiency goal, is 1.25.",
+          "score": 85.81,
+          "table_id": null,
+          "exact_matches": [
+            "PUE"
+          ]
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "3. Cooling Systems Cooling is provided by a chilled water system feeding in-row cooling units positioned between server racks. Chilled water is produced by three chillers operating in an N+1 configuration, each rated at 400 tons of cooling capacity. Server halls are arranged in a hot-aisle/cold-aisle containment layout, which improves cooling efficiency by preventing hot and cold air from mixing. Supply air temperature is maintained at 22\u00b0C (72\u00b0F) with a target humidity range of 40-60% relative humidity.",
+          "score": 40.63,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "1. Power Distribution Utility power enters the facility through two independent feeds from separate substations, providing N+1 redundancy at the facility level. Each feed is rated for 2.5 MW. Power passes through automatic transfer switches (ATS) before reaching the uninterruptible power supply (UPS) systems, which provide ride-through power during the transfer window and during the startup of backup generators. Three diesel generators, each rated at 1.2 MW, provide backup power and can sustain full facility load with one generator offline for maintenance (N+1 generator redundancy).",
+          "score": 34.27,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [
+        "PUE"
+      ],
+      "top_page_numbers": [
+        1
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R008",
+      "sheet_name": "Extraction",
+      "row_number": 11,
+      "section": null,
+      "requirement_text": "Which server hall currently has the least available IT load capacity remaining?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B11",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C11",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "5. Server Hall Capacity Table Hall IT Load Capacity (kW) Current IT Load (kW) Rack Count Cooling Type Hall A 1,800 1,240 60 In-row chilled water Hall B 1,800 1,610 60 In-row chilled water Hall C 1,200 540 40 In-row chilled water Hall D (new) 2,000 180 65 In-row chilled water + rear-door heat exchangers",
+          "score": 59.49,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "table",
+          "snippet": "Table T01-01 (Row 3) -> Hall: Hall C | IT Load Capacity (kW): 1,200 | Current IT Load (kW): 540 | Rack Count: 40 | Cooling Type: In-row chilled water",
+          "score": 50.79,
+          "table_id": "T01-01",
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "table",
+          "snippet": "Table T01-01 (Row 4) -> Hall: Hall D (new) | IT Load Capacity (kW): 2,000 | Current IT Load (kW): 180 | Rack Count: 65 | Cooling Type: In-row chilled water + rear-door heat exchangers",
+          "score": 50.63,
+          "table_id": "T01-01",
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [],
+      "top_page_numbers": [
+        1
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R009",
+      "sheet_name": "Extraction",
+      "row_number": 12,
+      "section": null,
+      "requirement_text": "How many racks does Hall D have, and what cooling method does it use?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B12",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C12",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "5. Server Hall Capacity Table Hall IT Load Capacity (kW) Current IT Load (kW) Rack Count Cooling Type Hall A 1,800 1,240 60 In-row chilled water Hall B 1,800 1,610 60 In-row chilled water Hall C 1,200 540 40 In-row chilled water Hall D (new) 2,000 180 65 In-row chilled water + rear-door heat exchangers",
+          "score": 55.18,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "table",
+          "snippet": "Table T01-01 (Row 4) -> Hall: Hall D (new) | IT Load Capacity (kW): 2,000 | Current IT Load (kW): 180 | Rack Count: 65 | Cooling Type: In-row chilled water + rear-door heat exchangers",
+          "score": 54.99,
+          "table_id": "T01-01",
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "table",
+          "snippet": "Table T01-01 (Row 3) -> Hall: Hall C | IT Load Capacity (kW): 1,200 | Current IT Load (kW): 540 | Rack Count: 40 | Cooling Type: In-row chilled water",
+          "score": 54.05,
+          "table_id": "T01-01",
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [],
+      "top_page_numbers": [
+        1
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R010",
+      "sheet_name": "Extraction",
+      "row_number": 13,
+      "section": null,
+      "requirement_text": "How often is chiller maintenance performed, and when is the next one scheduled?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B13",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C13",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "Generators are load-tested monthly for 30 minutes under simulated facility load. UPS battery health is checked quarterly, with full battery replacement typically required every 5 years. Chiller maintenance follows the manufacturer's schedule of semi-annual service, with the next scheduled service for all three chillers falling in the third week of next month. Hall D's cooling system, being newly commissioned, follows a more frequent monthly inspection schedule for its first year of operation.",
+          "score": 68.72,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "6. Maintenance Schedule",
+          "score": 40.61,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "1. Power Distribution Utility power enters the facility through two independent feeds from separate substations, providing N+1 redundancy at the facility level. Each feed is rated for 2.5 MW. Power passes through automatic transfer switches (ATS) before reaching the uninterruptible power supply (UPS) systems, which provide ride-through power during the transfer window and during the startup of backup generators. Three diesel generators, each rated at 1.2 MW, provide backup power and can sustain full facility load with one generator offline for maintenance (N+1 generator redundancy).",
+          "score": 40.17,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R011",
+      "sheet_name": "Extraction",
+      "row_number": 14,
+      "section": null,
+      "requirement_text": "Why does Hall D follow a different inspection schedule than the other halls?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B14",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C14",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "Generators are load-tested monthly for 30 minutes under simulated facility load. UPS battery health is checked quarterly, with full battery replacement typically required every 5 years. Chiller maintenance follows the manufacturer's schedule of semi-annual service, with the next scheduled service for all three chillers falling in the third week of next month. Hall D's cooling system, being newly commissioned, follows a more frequent monthly inspection schedule for its first year of operation.",
+          "score": 57.7,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "6. Maintenance Schedule",
+          "score": 37.14,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "table",
+          "snippet": "Table T01-01 (Row 4) -> Hall: Hall D (new) | IT Load Capacity (kW): 2,000 | Current IT Load (kW): 180 | Rack Count: 65 | Cooling Type: In-row chilled water + rear-door heat exchangers",
+          "score": 36.72,
+          "table_id": "T01-01",
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R012",
+      "sheet_name": "Extraction",
+      "row_number": 15,
+      "section": null,
+      "requirement_text": "What is the average annual cost of the facility's cooling system?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B15",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C15",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "Generators are load-tested monthly for 30 minutes under simulated facility load. UPS battery health is checked quarterly, with full battery replacement typically required every 5 years. Chiller maintenance follows the manufacturer's schedule of semi-annual service, with the next scheduled service for all three chillers falling in the third week of next month. Hall D's cooling system, being newly commissioned, follows a more frequent monthly inspection schedule for its first year of operation.",
+          "score": 57.38,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "4. Power Usage Effectiveness (PUE) PUE is calculated as Total Facility Power divided by IT Equipment Power. The facility's measured PUE over the past 12 months averaged 1.35, meaning for every 1 kW consumed by IT equipment, an additional 0.35 kW is consumed by cooling, power distribution losses, and other overhead. The facility's target PUE, set as part of the annual efficiency goal, is 1.25.",
+          "score": 57.02,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "3. Cooling Systems Cooling is provided by a chilled water system feeding in-row cooling units positioned between server racks. Chilled water is produced by three chillers operating in an N+1 configuration, each rated at 400 tons of cooling capacity. Server halls are arranged in a hot-aisle/cold-aisle containment layout, which improves cooling efficiency by preventing hot and cold air from mixing. Supply air temperature is maintained at 22\u00b0C (72\u00b0F) with a target humidity range of 40-60% relative humidity.",
+          "score": 51.06,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    }
+  ]
+}

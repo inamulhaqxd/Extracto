@@ -4,7 +4,7 @@
     "sheet_name": "Extraction",
     "row_number": "4",
     "section": "",
-    "requirement_text": "What local-preference value is set for UpstreamA, and does UpstreamC use the same value?",
+    "requirement_text": "How many utility power feeds enter the facility, and what redundancy level does this provide?",
     "source_cell": "A4"
   },
   {
@@ -12,7 +12,7 @@
     "sheet_name": "Extraction",
     "row_number": "5",
     "section": "",
-    "requirement_text": "Compare the community tags set in UpstreamA's and UpstreamC's route-maps. Are they the same?",
+    "requirement_text": "What is the power rating of each diesel generator?",
     "source_cell": "A5"
   },
   {
@@ -20,7 +20,7 @@
     "sheet_name": "Extraction",
     "row_number": "6",
     "section": "",
-    "requirement_text": "If a route matches both an IX condition and a customer condition, which community tag wins, and why?",
+    "requirement_text": "What UPS topology is used per server hall, and what does that mean?",
     "source_cell": "A6"
   },
   {
@@ -28,7 +28,7 @@
     "sheet_name": "Extraction",
     "row_number": "7",
     "section": "",
-    "requirement_text": "What percentage of interface bandwidth is guaranteed to Business-Critical traffic under the QoS policy?",
+    "requirement_text": "What is the battery runtime at full load, and how does it compare to the generator startup time?",
     "source_cell": "A7"
   },
   {
@@ -36,7 +36,7 @@
     "sheet_name": "Extraction",
     "row_number": "8",
     "section": "",
-    "requirement_text": "What happens to traffic that arrives with no recognized DSCP marking?",
+    "requirement_text": "What supply air temperature is maintained by the cooling system?",
     "source_cell": "A8"
   },
   {
@@ -44,7 +44,7 @@
     "sheet_name": "Extraction",
     "row_number": "9",
     "section": "",
-    "requirement_text": "Using the capacity formula, calculate the Required_Mbps for EDGE-2 given its peak concurrent users.",
+    "requirement_text": "How is PUE calculated, and what was the facility's average PUE over the last 12 months?",
     "source_cell": "A9"
   },
   {
@@ -52,7 +52,7 @@
     "sheet_name": "Extraction",
     "row_number": "10",
     "section": "",
-    "requirement_text": "Using the headroom formula and your EDGE-2 calculation above, what is EDGE-2's headroom percentage?",
+    "requirement_text": "What is the facility's target PUE, and how far off is the current average from that target?",
     "source_cell": "A10"
   },
   {
@@ -60,7 +60,7 @@
     "sheet_name": "Extraction",
     "row_number": "11",
     "section": "",
-    "requirement_text": "Based on that headroom percentage, does EDGE-2 need to be flagged for a capacity upgrade? Why?",
+    "requirement_text": "Which server hall currently has the least available IT load capacity remaining?",
     "source_cell": "A11"
   },
   {
@@ -68,7 +68,7 @@
     "sheet_name": "Extraction",
     "row_number": "12",
     "section": "",
-    "requirement_text": "Repeat the same Required_Mbps and headroom calculation for EDGE-3. Does EDGE-3 need a capacity upgrade?",
+    "requirement_text": "How many racks does Hall D have, and what cooling method does it use?",
     "source_cell": "A12"
   },
   {
@@ -76,7 +76,7 @@
     "sheet_name": "Extraction",
     "row_number": "13",
     "section": "",
-    "requirement_text": "Which peers are located at EDGE-3, and what session types are they?",
+    "requirement_text": "How often is chiller maintenance performed, and when is the next one scheduled?",
     "source_cell": "A13"
   },
   {
@@ -84,7 +84,7 @@
     "sheet_name": "Extraction",
     "row_number": "14",
     "section": "",
-    "requirement_text": "If IX-PeerZ shows 'Hold Timer Expired', what is the typical cause and recommended action per the troubleshooting table?",
+    "requirement_text": "Why does Hall D follow a different inspection schedule than the other halls?",
     "source_cell": "A14"
   },
   {
@@ -92,47 +92,7 @@
     "sheet_name": "Extraction",
     "row_number": "15",
     "section": "",
-    "requirement_text": "If CustomerW shows 'Max Prefix Limit Exceeded', what is the recommended action, and how does it differ from the same error on a transit session?",
+    "requirement_text": "What is the average annual cost of the facility's cooling system?",
     "source_cell": "A15"
-  },
-  {
-    "requirement_id": "REQ-S01-R013",
-    "sheet_name": "Extraction",
-    "row_number": "16",
-    "section": "",
-    "requirement_text": "What is the maximum prefix limit for UpstreamC, and which site is it located at?",
-    "source_cell": "A16"
-  },
-  {
-    "requirement_id": "REQ-S01-R014",
-    "sheet_name": "Extraction",
-    "row_number": "17",
-    "section": "",
-    "requirement_text": "Between UpstreamA and UpstreamC, which one has a higher local-preference, and what does that suggest about traffic preference between the two?",
-    "source_cell": "A17"
-  },
-  {
-    "requirement_id": "REQ-S01-R015",
-    "sheet_name": "Extraction",
-    "row_number": "18",
-    "section": "",
-    "requirement_text": "How many total peers are configured across all three edge sites?",
-    "source_cell": "A18"
-  },
-  {
-    "requirement_id": "REQ-S01-R016",
-    "sheet_name": "Extraction",
-    "row_number": "19",
-    "section": "",
-    "requirement_text": "What is the current CPU load on the EDGE-2 router?",
-    "source_cell": "A19"
-  },
-  {
-    "requirement_id": "REQ-S01-R017",
-    "sheet_name": "Extraction",
-    "row_number": "20",
-    "section": "",
-    "requirement_text": "What percentage of Voice traffic bandwidth is allowed under strict-priority queuing?",
-    "source_cell": "A20"
   }
 ]

@@ -1,86 +1,49 @@
 {
-  "document_id": "VERYHIGH_bgp_qos_capacity_spec",
-  "source_file": "C:\\Users\\Inam\\OneDrive\\Desktop\\tender\\testworkflowfile\\VERYHIGH_bgp_qos_capacity_spec.pdf",
+  "document_id": "MEDIUM_datacenter_power_cooling",
+  "source_file": "C:\\Users\\Inam\\OneDrive\\Desktop\\tender\\pipeline_lab\\input\\MEDIUM_datacenter_power_cooling.pdf",
   "total_pages": 2,
   "pages": [
     {
       "page_number": 1,
-      "text": "BGP, QoS & Capacity Planning — Technical\nSpecification (Rev 4.1)\nCore Network Engineering — Internal Reference\n1. Peering Overview\nThis document defines eBGP peering, QoS marking, and capacity planning parameters for AS-64500\nedge routers across three regional edge sites: EDGE-1, EDGE-2, and EDGE-3. All sessions use\nmultihop TTL of 2 unless otherwise noted, and MD5 authentication is mandatory except for IX\nroute-server peers.\n2. Peer Table\nPeer Remote ASN Site Session Type Keepalive/Hold (s) Max Prefixes\nUpstreamA AS-7018 EDGE-1 eBGP Transit 10 / 30 900,000\nUpstreamB AS-3356 EDGE-1 eBGP Transit 10 / 30 950,000\nUpstreamC AS-1299 EDGE-2 eBGP Transit 10 / 30 920,000\nIX-PeerX AS-24482 EDGE-1 eBGP Peering (IX) 3 / 9 50,000\nIX-PeerY AS-4788 EDGE-2 eBGP Peering (IX) 3 / 9 45,000\nIX-PeerZ AS-9902 EDGE-3 eBGP Peering (IX) 3 / 9 38,000\nCustomerZ AS-65010 EDGE-1 eBGP Customer 5 / 15 1,000\nCustomerW AS-65022 EDGE-3 eBGP Customer 5 / 15 1,500\n3. Sample Configuration — UpstreamA (EDGE-1)\nrouter bgp 64500\nneighbor 198.51.100.1 remote-as 7018\nneighbor 198.51.100.1 timers 10 30\nneighbor 198.51.100.1 maximum-prefix 900000 90\nneighbor 198.51.100.1 route-map RM-UPA-IN in\n!\nroute-map RM-UPA-IN permit 10\nset local-preference 150\nset community 64500:100 additive\n4. Sample Configuration — UpstreamC (EDGE-2)\nrouter bgp 64500\nneighbor 198.51.100.5 remote-as 1299\nneighbor 198.51.100.5 timers 10 30\nneighbor 198.51.100.5 maximum-prefix 920000 90\nneighbor 198.51.100.5 route-map RM-UPC-IN in\n!\nroute-map RM-UPC-IN permit 10\nset local-preference 130\nset community 64500:100 additive",
+      "text": "Datacenter Power & Cooling Systems Overview\nReference document describing the power distribution and cooling infrastructure across the facility's\nserver halls.\n1. Power Distribution\nUtility power enters the facility through two independent feeds from separate substations, providing N+1\nredundancy at the facility level. Each feed is rated for 2.5 MW. Power passes through automatic\ntransfer switches (ATS) before reaching the uninterruptible power supply (UPS) systems, which provide\nride-through power during the transfer window and during the startup of backup generators. Three\ndiesel generators, each rated at 1.2 MW, provide backup power and can sustain full facility load with\none generator offline for maintenance (N+1 generator redundancy).\n2. UPS Configuration\nUPS units are configured in a 2N topology per server hall, meaning each hall has two fully independent\nUPS paths, either of which can carry the full hall load alone. Battery runtime at full load is rated at 12\nminutes, sufficient to bridge the approximately 45-second generator startup and transfer window with\nsignificant margin.\n3. Cooling Systems\nCooling is provided by a chilled water system feeding in-row cooling units positioned between server\nracks. Chilled water is produced by three chillers operating in an N+1 configuration, each rated at 400\ntons of cooling capacity. Server halls are arranged in a hot-aisle/cold-aisle containment layout, which\nimproves cooling efficiency by preventing hot and cold air from mixing. Supply air temperature is\nmaintained at 22°C (72°F) with a target humidity range of 40-60% relative humidity.\n4. Power Usage Effectiveness (PUE)\nPUE is calculated as Total Facility Power divided by IT Equipment Power. The facility's measured PUE\nover the past 12 months averaged 1.35, meaning for every 1 kW consumed by IT equipment, an\nadditional 0.35 kW is consumed by cooling, power distribution losses, and other overhead. The facility's\ntarget PUE, set as part of the annual efficiency goal, is 1.25.\n5. Server Hall Capacity Table\nHall IT Load Capacity (kW) Current IT Load (kW) Rack Count Cooling Type\nHall A 1,800 1,240 60 In-row chilled water\nHall B 1,800 1,610 60 In-row chilled water\nHall C 1,200 540 40 In-row chilled water\nHall D (new) 2,000 180 65 In-row chilled water + rear-door heat exchangers\n6. Maintenance Schedule",
       "tables": [
         {
           "table_id": "T01-01",
           "headers": [
-            "Peer",
-            "Remote ASN",
-            "Site",
-            "Session Type",
-            "Keepalive/Hold (s)",
-            "Max Prefixes"
+            "Hall",
+            "IT Load Capacity (kW)",
+            "Current IT Load (kW)",
+            "Rack Count",
+            "Cooling Type"
           ],
           "rows": [
             [
-              "UpstreamA",
-              "AS-7018",
-              "EDGE-1",
-              "eBGP Transit",
-              "10 / 30",
-              "900,000"
+              "Hall A",
+              "1,800",
+              "1,240",
+              "60",
+              "In-row chilled water"
             ],
             [
-              "UpstreamB",
-              "AS-3356",
-              "EDGE-1",
-              "eBGP Transit",
-              "10 / 30",
-              "950,000"
+              "Hall B",
+              "1,800",
+              "1,610",
+              "60",
+              "In-row chilled water"
             ],
             [
-              "UpstreamC",
-              "AS-1299",
-              "EDGE-2",
-              "eBGP Transit",
-              "10 / 30",
-              "920,000"
+              "Hall C",
+              "1,200",
+              "540",
+              "40",
+              "In-row chilled water"
             ],
             [
-              "IX-PeerX",
-              "AS-24482",
-              "EDGE-1",
-              "eBGP Peering (IX)",
-              "3 / 9",
-              "50,000"
-            ],
-            [
-              "IX-PeerY",
-              "AS-4788",
-              "EDGE-2",
-              "eBGP Peering (IX)",
-              "3 / 9",
-              "45,000"
-            ],
-            [
-              "IX-PeerZ",
-              "AS-9902",
-              "EDGE-3",
-              "eBGP Peering (IX)",
-              "3 / 9",
-              "38,000"
-            ],
-            [
-              "CustomerZ",
-              "AS-65010",
-              "EDGE-1",
-              "eBGP Customer",
-              "5 / 15",
-              "1,000"
-            ],
-            [
-              "CustomerW",
-              "AS-65022",
-              "EDGE-3",
-              "eBGP Customer",
-              "5 / 15",
-              "1,500"
+              "Hall D (new)",
+              "2,000",
+              "180",
+              "65",
+              "In-row chilled water + rear-door heat exchangers"
             ]
           ]
         }
@@ -91,69 +54,8 @@
     },
     {
       "page_number": 2,
-      "text": "5. QoS Marking Policy\nTraffic is classified into three QoS classes at ingress based on DSCP marking: Voice (EF, DSCP 46)\nreceives strict-priority queuing up to 10% of interface bandwidth; Business-Critical (AF31, DSCP 26)\nreceives guaranteed minimum bandwidth of 30% with the ability to burst higher when capacity allows;\nBest-Effort (DSCP 0) receives the remaining bandwidth with no guarantee and is the first class dropped\nunder congestion. Any traffic arriving without a recognized DSCP marking is treated as Best-Effort by\ndefault, not as an error condition.\n6. Community Tag Policy\nRoutes from customers are tagged 64500:200 and advertised to all upstreams and IX peers. Routes\nfrom IX peers are tagged 64500:300 and are advertised only to customers, never to upstreams or other\nIX peers. Routes from upstreams are tagged 64500:100 and are customer-facing only, never\nre-advertised to upstreams or IX peers. If a route matches more than one condition, the more restrictive\ntag takes precedence, where restrictiveness ranks IX (300) as most restrictive, followed by upstream\n(100), followed by customer (200) as least restrictive.\n7. Capacity Planning Formulas\nRequired uplink capacity: Required_Mbps = (Peak_Concurrent_Users × Avg_Session_Kbps) /\n1000 × Overprovision_Factor. Standard Overprovision_Factor is 1.4. Avg_Session_Kbps is currently\n220 Kbps per user, measured quarterly.\nRedundancy headroom: Headroom_Percent = ((Current_Uplink_Mbps - Required_Mbps) /\nCurrent_Uplink_Mbps) × 100. Sites with Headroom_Percent below 15% are flagged for capacity\nupgrade planning in the following quarter.\n8. Site Capacity Table\nSite Peak Concurrent Users Current Uplink (Gbps)\nEDGE-1 26,000 10\nEDGE-2 31,000 10\nEDGE-3 14,500 5\n9. Troubleshooting — Known Error Codes\nError Session Type Typical Cause Action\nHold Timer Expired IX Peer IX route-server maintenance Monitor; usually self-resolves\nHold Timer Expired Transit Path MTU or link issue Check transport path before escalating\nMax Prefix Limit Exceeded Transit Upstream route leak or growth Manual re-enable after confirming count with upstream\nMax Prefix Limit Exceeded Customer Customer-side misconfiguration Contact customer NOC directly",
-      "tables": [
-        {
-          "table_id": "T02-01",
-          "headers": [
-            "Site",
-            "Peak Concurrent Users",
-            "Current Uplink (Gbps)"
-          ],
-          "rows": [
-            [
-              "EDGE-1",
-              "26,000",
-              "10"
-            ],
-            [
-              "EDGE-2",
-              "31,000",
-              "10"
-            ],
-            [
-              "EDGE-3",
-              "14,500",
-              "5"
-            ]
-          ]
-        },
-        {
-          "table_id": "T02-02",
-          "headers": [
-            "Error",
-            "Session Type",
-            "Typical Cause",
-            "Action"
-          ],
-          "rows": [
-            [
-              "Hold Timer Expired",
-              "IX Peer",
-              "IX route-server maintenance",
-              "Monitor; usually self-resolves"
-            ],
-            [
-              "Hold Timer Expired",
-              "Transit",
-              "Path MTU or link issue",
-              "Check transport path before escalating"
-            ],
-            [
-              "Max Prefix Limit Exceeded",
-              "Transit",
-              "Upstream route leak or growth",
-              "Manual re-enable after confirming count w"
-            ],
-            [
-              "Max Prefix Limit Exceeded",
-              "Customer",
-              "Customer-side misconfiguration",
-              "Contact customer NOC directly"
-            ]
-          ]
-        }
-      ],
+      "text": "Generators are load-tested monthly for 30 minutes under simulated facility load. UPS battery health is\nchecked quarterly, with full battery replacement typically required every 5 years. Chiller maintenance\nfollows the manufacturer's schedule of semi-annual service, with the next scheduled service for all\nthree chillers falling in the third week of next month. Hall D's cooling system, being newly\ncommissioned, follows a more frequent monthly inspection schedule for its first year of operation.",
+      "tables": [],
       "images": [],
       "ocr": [],
       "vision_analysis": []
