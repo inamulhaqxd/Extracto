@@ -3,7 +3,6 @@ import json
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -61,7 +60,7 @@ class RunDecisionResponse(BaseModel):
     reasoning: str | None = None
     matched_value: str | None = None
     resolving_layer: str | None = None
-    evidence: list[dict[str, Any]] = Field(default_factory=list)
+    evidence: list[dict[str, object]] = Field(default_factory=list)
     needs_review: bool = False
     review_notes: str | None = None
 
@@ -156,7 +155,7 @@ async def execute_pipeline_background(
         )
 
         decisions_json_path = output_dir / "compliance_decisions.json"
-        raw_decisions: list[dict[str, Any]] = []
+        raw_decisions: list[dict[str, object]] = []
         if decisions_json_path.exists():
             with open(decisions_json_path, "r", encoding="utf-8") as f:
                 dec_data = json.load(f)
@@ -290,7 +289,12 @@ async def get_run_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
 
     meta = run.metadata_json or {}
-    raw_decisions = meta.get("decisions", [])
+    raw_decisions = meta.get("decisions")
+    decisions_items: list[dict[str, object]] = []
+    if isinstance(raw_decisions, list):
+        for item in raw_decisions:
+            if isinstance(item, dict):
+                decisions_items.append({str(k): v for k, v in item.items()})
 
     decisions_list: list[RunDecisionResponse] = []
     comp_cnt = 0
@@ -299,10 +303,11 @@ async def get_run_status(
     nf_cnt = 0
     low_conf_cnt = 0
 
-    for d in raw_decisions:
+    for d in decisions_items:
         state_val = str(d.get("compliance_state") or d.get("state") or d.get("status") or "NOT_FOUND")
-        conf = float(d.get("confidence", 1.0))
-        m_val = d.get("extracted_value") or d.get("matched_value")
+        conf_raw = d.get("confidence")
+        conf = float(str(conf_raw)) if conf_raw is not None else 1.0
+        m_val = str(d.get("extracted_value") or d.get("matched_value")) if (d.get("extracted_value") or d.get("matched_value")) else None
 
         if "COMPLIANT" in state_val and "NON" not in state_val and "PARTIAL" not in state_val:
             comp_cnt += 1
@@ -316,19 +321,26 @@ async def get_run_status(
         if conf < 0.70 or d.get("needs_review"):
             low_conf_cnt += 1
 
+        ev_raw = d.get("evidence")
+        ev_list: list[dict[str, object]] = []
+        if isinstance(ev_raw, list):
+            for ev_item in ev_raw:
+                if isinstance(ev_item, dict):
+                    ev_list.append({str(k): v for k, v in ev_item.items()})
+
         decisions_list.append(
             RunDecisionResponse(
-                requirement_id=d.get("requirement_id") or "REQ",
-                requirement_text=d.get("requirement_text") or "",
-                section=d.get("section"),
+                requirement_id=str(d.get("requirement_id") or "REQ"),
+                requirement_text=str(d.get("requirement_text") or ""),
+                section=str(d.get("section")) if d.get("section") else None,
                 status=state_val,
                 confidence=conf,
-                reasoning=d.get("reasoning"),
+                reasoning=str(d.get("reasoning")) if d.get("reasoning") else None,
                 matched_value=m_val,
-                resolving_layer=d.get("resolving_layer"),
-                evidence=d.get("evidence", []),
+                resolving_layer=str(d.get("resolving_layer")) if d.get("resolving_layer") else None,
+                evidence=ev_list,
                 needs_review=bool(d.get("needs_review") or conf < 0.70 or "AMBIGUOUS" in state_val),
-                review_notes=d.get("review_notes"),
+                review_notes=str(d.get("review_notes")) if d.get("review_notes") else None,
             )
         )
 
@@ -338,9 +350,9 @@ async def get_run_status(
         progress=run.progress,
         current_step=run.current_step,
         model_used=run.model_used,
-        pdf_filename=meta.get("pdf_filename"),
-        workbook_filename=meta.get("workbook_filename"),
-        generated_file=meta.get("generated_file"),
+        pdf_filename=str(meta["pdf_filename"]) if meta.get("pdf_filename") else None,
+        workbook_filename=str(meta["workbook_filename"]) if meta.get("workbook_filename") else None,
+        generated_file=str(meta["generated_file"]) if meta.get("generated_file") else None,
         total_requirements=len(decisions_list),
         compliant_count=comp_cnt,
         non_compliant_count=non_comp_cnt,
@@ -398,30 +410,34 @@ async def submit_run_review(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
 
     meta = run.metadata_json or {}
-    decisions_raw = meta.get("decisions", [])
+    decisions_raw = meta.get("decisions")
     reviews_by_req = {r.requirement_id: r for r in review_req.reviews}
 
     # Apply overrides
-    updated_decisions: list[dict[str, Any]] = []
-    for d_dict in decisions_raw:
-        item = dict(d_dict)
-        req_id = item.get("requirement_id")
+    updated_decisions: list[dict[str, object]] = []
+    if isinstance(decisions_raw, list):
+        for d_dict in decisions_raw:
+            if not isinstance(d_dict, dict):
+                continue
+            item: dict[str, object] = {str(k): v for k, v in d_dict.items()}
+            req_id = str(item.get("requirement_id") or "")
 
-        if req_id in reviews_by_req:
-            rev = reviews_by_req[req_id]
-            item["compliance_state"] = rev.status.upper()
-            item["status"] = rev.status.upper()
-            if rev.matched_value is not None:
-                item["extracted_value"] = rev.matched_value
-                item["matched_value"] = rev.matched_value
-            if rev.confidence is not None:
-                item["confidence"] = rev.confidence
-            if rev.review_notes:
-                item["review_notes"] = rev.review_notes
-                item["reasoning"] = f"{item.get('reasoning', '')} [Reviewer Note: {rev.review_notes}]"
-            item["needs_review"] = False
+            if req_id in reviews_by_req:
+                rev = reviews_by_req[req_id]
+                item["compliance_state"] = rev.status.upper()
+                item["status"] = rev.status.upper()
+                if rev.matched_value is not None:
+                    item["extracted_value"] = rev.matched_value
+                    item["matched_value"] = rev.matched_value
+                if rev.confidence is not None:
+                    item["confidence"] = rev.confidence
+                if rev.review_notes:
+                    item["review_notes"] = rev.review_notes
+                    reason_base = str(item.get("reasoning") or "")
+                    item["reasoning"] = f"{reason_base} [Reviewer Note: {rev.review_notes}]"
+                item["needs_review"] = False
 
-        updated_decisions.append(item)
+            updated_decisions.append(item)
 
     # Re-populate workbook with updated decisions
     if run.workbook_id:
@@ -466,7 +482,8 @@ async def list_runs(
     output = []
     for r in runs:
         meta = r.metadata_json or {}
-        decisions_raw = meta.get("decisions", [])
+        decisions_raw = meta.get("decisions")
+        decisions_len = len(decisions_raw) if isinstance(decisions_raw, list) else 0
         output.append(
             RunResponse(
                 run_id=str(r.id),
@@ -474,10 +491,10 @@ async def list_runs(
                 progress=r.progress,
                 current_step=r.current_step,
                 model_used=r.model_used,
-                pdf_filename=meta.get("pdf_filename"),
-                workbook_filename=meta.get("workbook_filename"),
-                generated_file=meta.get("generated_file"),
-                total_requirements=len(decisions_raw),
+                pdf_filename=str(meta["pdf_filename"]) if meta.get("pdf_filename") else None,
+                workbook_filename=str(meta["workbook_filename"]) if meta.get("workbook_filename") else None,
+                generated_file=str(meta["generated_file"]) if meta.get("generated_file") else None,
+                total_requirements=decisions_len,
                 started_at=r.started_at,
                 completed_at=r.completed_at,
                 error_message=r.error_message,

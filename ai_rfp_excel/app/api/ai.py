@@ -69,7 +69,7 @@ async def get_user_model_preference(
     if not isinstance(meta, dict):
         meta = {}
 
-    preferred_tag = meta.get("preferred_llm_model", settings.DEFAULT_LLM_MODEL)
+    preferred_tag = str(meta.get("preferred_llm_model") or settings.DEFAULT_LLM_MODEL)
     model_name = next((m.name for m in AVAILABLE_MODELS if m.tag == preferred_tag), preferred_tag)
 
     return ModelPreference(model_tag=preferred_tag, model_name=model_name)

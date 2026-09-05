@@ -8,11 +8,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from sqlalchemy import select
 
 from ai_rfp_excel.app.api.auth_utils import hash_password
-from ai_rfp_excel.app.database.connection import async_session
+from ai_rfp_excel.app.database.connection import async_session, init_db
 from ai_rfp_excel.app.database.models import User
 
 
 async def seed() -> None:
+    await init_db()
     async with async_session() as session:
         result = await session.execute(select(User).where((User.email == "admin@tender.local") | (User.username == "admin")))
         user = result.scalar_one_or_none()
