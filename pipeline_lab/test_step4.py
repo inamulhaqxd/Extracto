@@ -543,6 +543,7 @@ def test_numeric_compliance_integration_in_resolve() -> None:
     # When raw value is extracted as 64 GB:
     extracted_val = "64 GB"
     pair = extract_numeric_value_and_unit(extracted_val)
+    assert pair is not None
     assert pair == (64.0, "gb")
 
     parsed = parse_numeric_constraint("Should provide at least 32 GB RAM per compute node")
