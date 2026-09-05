@@ -135,22 +135,16 @@ CRITICAL RULES (Follow in strict priority order):
    - Carefully verify which entity or team is responsible for which specific action. When a list has multiple actions (e.g. Action 1 vs Action 2), attribute the exact team assigned to that specific action. Do not confuse adjacent items.
    - Verify negative statements: if the document says 'None (internal failover only)' or 'had not previously failed', answer with a clear factual "No" and never say "Yes".
 
-3. Excel Target Columns ("columns" dictionary):
-   - Answer/Value columns (e.g. 'AI Answer', 'Specification', 'Response', 'Value'): concise answer satisfying all clauses of the question.
-   - Source/Citation columns (e.g. 'Source Section', 'Citation', 'Location', 'Page', 'Reference'): provide ONLY the exact document location label copied from the snippet Location header (e.g. 'Page 1, Table T01-01' or 'Page 2, Section Follow-up Actions'). Never invent decimal subsections (such as Section 1.2 or Section 2.2.2).
-   - Remarks/Notes columns (e.g. 'Remarks', 'Comments', 'Notes', 'Explanation'): step-by-step calculation or detailed explanation.
-   - Status/Compliance columns (e.g. 'Compliance', 'Status'): provide 'COMPLIANT' or 'NON_COMPLIANT'.
-
-4. Determine compliance_state as:
+3. Determine compliance_state as:
    - COMPLIANT: The evidence confirms the requirement or answers the factual query.
    - NON_COMPLIANT: The evidence explicitly conflicts with or fails the requirement.
    - PARTIALLY_COMPLIANT: Only some conditions are met.
    - NOT_FOUND: The specification or answer is absent from the evidence.
    - AMBIGUOUS: Conflicting or unclear evidence.
 
-5. Citation: Copy strictly from the snippet Location header. If extracted_value is "NOT_SPECIFIED", citation must be "None".
+4. Citation: Copy strictly from the snippet Location header. If extracted_value is "NOT_SPECIFIED", citation must be "None".
 
-6. You MUST respond with ONLY valid JSON adhering strictly to this schema:
+5. You MUST respond with ONLY valid JSON adhering strictly to this schema:
 {
   "extracted_value": "short factual answer, or brief answer to each clause for compound questions, or NOT_SPECIFIED",
   "compliance_state": "COMPLIANT" | "NON_COMPLIANT" | "PARTIALLY_COMPLIANT" | "NOT_FOUND" | "AMBIGUOUS",
@@ -257,22 +251,130 @@ def compute_domain_math_notes(
     return None
 
 
+UNIT_SCALES: dict[str, dict[str, float]] = {
+    "storage": {
+        "b": 1.0,
+        "kb": 1024.0,
+        "mb": 1024.0 ** 2,
+        "gb": 1024.0 ** 3,
+        "tb": 1024.0 ** 4,
+        "pb": 1024.0 ** 5,
+    },
+    "time": {
+        "ms": 0.001,
+        "s": 1.0,
+        "sec": 1.0,
+        "second": 1.0,
+        "seconds": 1.0,
+        "min": 60.0,
+        "minute": 60.0,
+        "minutes": 60.0,
+        "h": 3600.0,
+        "hr": 3600.0,
+        "hour": 3600.0,
+        "hours": 3600.0,
+        "d": 86400.0,
+        "day": 86400.0,
+        "days": 86400.0,
+        "year": 31536000.0,
+        "years": 31536000.0,
+    },
+    "power": {
+        "w": 1.0,
+        "kw": 1000.0,
+        "mw": 1000000.0,
+        "gw": 1000000000.0,
+    },
+}
+
+
+def check_numeric_compliance(operator: str, required_value: float, offered_value: float) -> str:
+    """Evaluate numeric compliance deterministically using python operators (Stage 2)."""
+    ops = {
+        ">=": lambda a, b: a >= b,
+        "<=": lambda a, b: a <= b,
+        "==": lambda a, b: a == b,
+        ">": lambda a, b: a > b,
+        "<": lambda a, b: a < b,
+    }
+    if operator not in ops:
+        return "AMBIGUOUS"
+    return "COMPLIANT" if ops[operator](offered_value, required_value) else "NON_COMPLIANT"
+
+
+def parse_numeric_constraint(text: str) -> tuple[str, float, str | None] | None:
+    """Parse requirement constraint into (operator, threshold_value, unit)."""
+    patterns: list[tuple[str, str]] = [
+        (r"(?:at least|minimum|min\.?|>=)\s*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z%]+)?", ">="),
+        (r"(?:at most|maximum|max\.?|<=)\s*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z%]+)?", "<="),
+        (r"(?:more than|over|higher than|greater than|>)\s*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z%]+)?", ">"),
+        (r"(?:less than|under|lower than|<)\s*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z%]+)?", "<"),
+        (r"(?:equal to|exactly|==)\s*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z%]+)?", "=="),
+    ]
+    for pat, op in patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            val_str = m.group(1)
+            unit_str = m.group(2) if m.lastindex and m.lastindex >= 2 and m.group(2) else None
+            try:
+                val = float(val_str)
+                unit = unit_str.strip().lower() if unit_str else None
+                return op, val, unit
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def extract_numeric_value_and_unit(text: str) -> tuple[float, str | None] | None:
+    """Extract offered numeric value and optional unit from extracted string."""
+    clean = text.replace(",", "").strip()
+    m = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z%]+)?", clean)
+    if m:
+        try:
+            val = float(m.group(1))
+            unit = m.group(2).strip().lower() if m.group(2) else None
+            return val, unit
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def evaluate_numeric_compliance(
+    operator: str,
+    required_value: float,
+    required_unit: str | None,
+    offered_value: float,
+    offered_unit: str | None,
+) -> str:
+    """Evaluate compliance with unit normalization across storage, time, and power."""
+    norm_req = required_value
+    norm_off = offered_value
+
+    if required_unit and offered_unit:
+        req_u = required_unit.lower()
+        off_u = offered_unit.lower()
+        if req_u != off_u:
+            for _, scales in UNIT_SCALES.items():
+                if req_u in scales and off_u in scales:
+                    norm_req = required_value * scales[req_u]
+                    norm_off = offered_value * scales[off_u]
+                    break
+            else:
+                return "AMBIGUOUS"
+
+    return check_numeric_compliance(operator, norm_req, norm_off)
+
+
 def build_prompt(
     requirement_text: str,
     section: str | None,
     candidate_snippets: list[dict[str, object]],
     target_columns: list[str] | None = None,
 ) -> str:
-    """Construct structured user prompt with requirement, candidate evidence, and target Excel columns."""
+    """Construct structured user prompt with requirement and candidate evidence."""
     prompt_parts: list[str] = [f"Requirement / Question: {requirement_text}"]
     if section:
         prompt_parts.append(f"Section Context: {section}")
-
-    if target_columns:
-        prompt_parts.append(
-            "\nTarget Excel Columns to fill for this row:\n"
-            + "\n".join(f"- {col}" for col in target_columns)
-        )
 
     # Check for domain-specific math assistance
     math_notes = compute_domain_math_notes(requirement_text, candidate_snippets)
@@ -444,14 +546,31 @@ def offline_deterministic_fallback(candidate_snippets: list[dict[str, object]]) 
     }
 
 
+def format_for_column(
+    column_name: str,
+    extracted_value: str,
+    citation: str,
+    compliance_state: str,
+    remarks: str,
+) -> str:
+    """Route LLM's raw output to the appropriate Excel column based on detected column name."""
+    name = column_name.lower()
+    if any(k in name for k in ["citation", "source", "location", "reference", "page"]):
+        return citation if citation else "None"
+    if any(k in name for k in ["compliance", "status"]):
+        return compliance_state
+    if any(k in name for k in ["remark", "comment", "note", "explanation"]):
+        return remarks
+    return extracted_value  # answer/value columns
+
+
 def map_slots(
     target_slots: dict[str, dict[str, str | int | bool | None]],
     resolution: LLMResolution,
     needs_review: bool,
 ) -> dict[str, SlotAssignment]:
-    """Map the resolved extracted values and remarks to target Excel cell coordinates."""
+    """Map the resolved extracted values and remarks to target Excel cell coordinates using format_for_column."""
     assignments: dict[str, SlotAssignment] = {}
-    ai_columns = resolution.get("columns", {})
 
     for slot_name, slot_info in target_slots.items():
         cell_raw = slot_info.get("cell_coordinate")
@@ -467,42 +586,25 @@ def map_slots(
 
         raw_type = str(slot_info.get("slot_type", slot_name)).strip().lower()
         header_name = str(slot_info.get("header_name", "")).strip()
+        column_identifier = header_name if header_name else (raw_type or slot_name)
 
-        # Check slot role
-        is_source_col = any(
-            kw in header_name.lower() or kw in raw_type
-            for kw in ("source", "section", "citation", "page", "location", "reference")
-        ) and not any(
-            kw in header_name.lower() for kw in ("answer", "response", "value")
-        )
-        is_answer_col = raw_type in ANSWER_SLOT_TYPES or any(
-            kw in header_name.lower() for kw in ("answer", "response", "specification", "value")
+        val_to_write = format_for_column(
+            column_name=column_identifier,
+            extracted_value=resolution["extracted_value"],
+            citation=resolution["citation"],
+            compliance_state=resolution["compliance_state"],
+            remarks=resolution["remarks"],
         )
 
-        val_to_write: str | None = None
-        if is_source_col:
-            val_to_write = resolution["citation"] if resolution["citation"] else "NOT_SPECIFIED"
-        elif is_answer_col:
-            val_to_write = resolution["extracted_value"]
-        elif raw_type in REMARKS_SLOT_TYPES:
-            citation_suffix = f" ({resolution['citation']})" if resolution["citation"] else ""
-            val_to_write = f"{resolution['remarks']}{citation_suffix}"
-        elif raw_type in COMPLIANCE_SLOT_TYPES:
-            val_to_write = resolution["compliance_state"]
-        else:
-            if ai_columns and header_name in ai_columns:
-                val_to_write = ai_columns[header_name]
-            elif ai_columns and slot_name in ai_columns:
-                val_to_write = ai_columns[slot_name]
-            else:
-                val_to_write = resolution["extracted_value"]
-
-        # Rule 7 Zero-Hallucination: For missing items, ensure answer slot receives NOT_SPECIFIED and source/citation receives None
+        # Rule 7 Zero-Hallucination: For missing items, ensure answer slot receives NOT_SPECIFIED and citation receives None
         if resolution["extracted_value"] == "NOT_SPECIFIED" or resolution["compliance_state"] == "NOT_FOUND":
-            if raw_type in ANSWER_SLOT_TYPES or any(kw in header_name.lower() for kw in ("answer", "response", "spec", "value")):
-                val_to_write = "NOT_SPECIFIED"
-            elif any(kw in header_name.lower() or kw in raw_type for kw in ("source", "section", "citation", "page", "location", "reference")):
+            name_lower = column_identifier.lower()
+            if any(k in name_lower for k in ["citation", "source", "location", "reference", "page"]):
                 val_to_write = "None"
+            elif any(k in name_lower for k in ["compliance", "status"]):
+                val_to_write = "NOT_FOUND"
+            elif not any(k in name_lower for k in ["remark", "comment", "note", "explanation"]):
+                val_to_write = "NOT_SPECIFIED"
 
         assignments[slot_name] = {
             "slot_type": raw_type,
@@ -561,6 +663,18 @@ def resolve_requirement(
             resolution = parsed_res
         else:
             resolution = offline_deterministic_fallback(snippets)
+
+    # Stage 2: Deterministic numeric compliance comparison in Python
+    if resolution["extracted_value"] != "NOT_SPECIFIED":
+        parsed_constraint = parse_numeric_constraint(req_text)
+        if parsed_constraint is not None:
+            op, req_val, req_unit = parsed_constraint
+            offered_pair = extract_numeric_value_and_unit(resolution["extracted_value"])
+            if offered_pair is not None:
+                off_val, off_unit = offered_pair
+                numeric_state = evaluate_numeric_compliance(op, req_val, req_unit, off_val, off_unit)
+                if numeric_state in ("COMPLIANT", "NON_COMPLIANT"):
+                    resolution["compliance_state"] = cast(ComplianceState, numeric_state)
 
     needs_review = (
         resolution["compliance_state"] in ("NOT_FOUND", "AMBIGUOUS")

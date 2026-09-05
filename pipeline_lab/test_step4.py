@@ -24,10 +24,15 @@ from pipeline_lab.step4_resolve_compliance import (
     LLMResolution,
     build_prompt,
     call_local_ollama,
+    check_numeric_compliance,
     clear_prompt_cache,
+    evaluate_numeric_compliance,
+    extract_numeric_value_and_unit,
+    format_for_column,
     map_slots,
     offline_deterministic_fallback,
     parse_llm_json_response,
+    parse_numeric_constraint,
     resolve_requirement,
     run_compliance_resolution,
 )
@@ -414,5 +419,138 @@ def test_prompt_caching_deduplication() -> None:
     assert parsed["extracted_value"] == "100 TB"
     assert parsed["compliance_state"] == "COMPLIANT"
     clear_prompt_cache()
+
+
+def test_format_for_column() -> None:
+    """Verify deterministic column routing in Python (Stage 1)."""
+    val = "16 GB"
+    cit = "Page 2, Table 1"
+    comp = "COMPLIANT"
+    rem = "Supported by default configuration."
+
+    assert format_for_column("AI Answer", val, cit, comp, rem) == "16 GB"
+    assert format_for_column("Specification", val, cit, comp, rem) == "16 GB"
+    assert format_for_column("Vendor Response", val, cit, comp, rem) == "16 GB"
+
+    assert format_for_column("Source Section", val, cit, comp, rem) == "Page 2, Table 1"
+    assert format_for_column("Citation", val, cit, comp, rem) == "Page 2, Table 1"
+    assert format_for_column("Page Reference", val, cit, comp, rem) == "Page 2, Table 1"
+
+    assert format_for_column("Compliance Status", val, cit, comp, rem) == "COMPLIANT"
+    assert format_for_column("Status", val, cit, comp, rem) == "COMPLIANT"
+
+    assert format_for_column("Remarks", val, cit, comp, rem) == "Supported by default configuration."
+    assert format_for_column("Notes", val, cit, comp, rem) == "Supported by default configuration."
+    assert format_for_column("Explanation", val, cit, comp, rem) == "Supported by default configuration."
+
+
+def test_check_numeric_compliance() -> None:
+    """Verify raw numeric operator comparison logic (Stage 2)."""
+    assert check_numeric_compliance(">=", 16.0, 16.0) == "COMPLIANT"
+    assert check_numeric_compliance(">=", 16.0, 32.0) == "COMPLIANT"
+    assert check_numeric_compliance(">=", 16.0, 8.0) == "NON_COMPLIANT"
+
+    assert check_numeric_compliance("<=", 50.0, 45.0) == "COMPLIANT"
+    assert check_numeric_compliance("<=", 50.0, 55.0) == "NON_COMPLIANT"
+
+    assert check_numeric_compliance(">", 32.0, 64.0) == "COMPLIANT"
+    assert check_numeric_compliance(">", 32.0, 32.0) == "NON_COMPLIANT"
+
+    assert check_numeric_compliance("<", 10.0, 5.0) == "COMPLIANT"
+    assert check_numeric_compliance("<", 10.0, 15.0) == "NON_COMPLIANT"
+
+    assert check_numeric_compliance("==", 4.0, 4.0) == "COMPLIANT"
+    assert check_numeric_compliance("==", 4.0, 5.0) == "NON_COMPLIANT"
+
+    assert check_numeric_compliance("INVALID_OP", 1.0, 1.0) == "AMBIGUOUS"
+
+
+def test_parse_numeric_constraint() -> None:
+    """Verify regex extraction of operator, threshold value, and unit from requirements (Stage 2)."""
+    # At least / Minimum
+    res1 = parse_numeric_constraint("Should provide at least 350 TB RAW capacity of SAN")
+    assert res1 == (">=", 350.0, "tb")
+
+    res2 = parse_numeric_constraint("Minimum 16 GB memory per blade")
+    assert res2 == (">=", 16.0, "gb")
+
+    res3 = parse_numeric_constraint("Chassis must support >= 4 power supplies")
+    assert res3 == (">=", 4.0, "power")
+
+    # Higher than / More than
+    res4 = parse_numeric_constraint("Higher than 32 cores per controller")
+    assert res4 == (">", 32.0, "cores")
+
+    res5 = parse_numeric_constraint("Over 50 pages required")
+    assert res5 == (">", 50.0, "pages")
+
+    # Maximum / At most / Under
+    res6 = parse_numeric_constraint("Latency under 50 ms")
+    assert res6 == ("<", 50.0, "ms")
+
+    res7 = parse_numeric_constraint("Maximum 1.5 PUE target")
+    assert res7 == ("<=", 1.5, "pue")
+
+    # Qualitative requirements must return None (correctly classified as qualitative)
+    assert parse_numeric_constraint("What model of smartphone is issued to new employees?") is None
+    assert parse_numeric_constraint("What is the primary UPS topology?") is None
+    assert parse_numeric_constraint("Why does Hall D follow a different inspection schedule?") is None
+
+
+def test_evaluate_numeric_compliance_with_units() -> None:
+    """Verify unit-aware normalization across data storage, time, and power (Stage 2)."""
+    # Storage unit conversion: 1 TB required vs 2048 GB offered -> COMPLIANT
+    assert evaluate_numeric_compliance(">=", 1.0, "tb", 2048.0, "gb") == "COMPLIANT"
+    # Storage unit conversion: 1 TB required vs 500 GB offered -> NON_COMPLIANT
+    assert evaluate_numeric_compliance(">=", 1.0, "tb", 500.0, "gb") == "NON_COMPLIANT"
+
+    # Time unit conversion: 1 minute required vs 45 seconds offered with <= operator -> COMPLIANT
+    assert evaluate_numeric_compliance("<=", 1.0, "minute", 45.0, "seconds") == "COMPLIANT"
+    assert evaluate_numeric_compliance("<=", 1.0, "minute", 90.0, "seconds") == "NON_COMPLIANT"
+
+    # Incompatible units
+    assert evaluate_numeric_compliance(">=", 10.0, "gb", 10.0, "seconds") == "AMBIGUOUS"
+
+
+def test_numeric_compliance_integration_in_resolve() -> None:
+    """Verify that resolve_requirement correctly updates compliance_state for numeric constraints."""
+    req: dict[str, object] = {
+        "requirement_id": "REQ-NUM-01",
+        "sheet_name": "Sheet1",
+        "row_number": 10,
+        "section": "Compute",
+        "requirement_text": "Should provide at least 32 GB RAM per compute node",
+        "candidate_snippets": [
+            {
+                "page_number": 1,
+                "source_type": "text",
+                "snippet": "Compute nodes are populated with 64 GB DDR5 RAM.",
+            }
+        ],
+        "target_slots": {
+            "status": {
+                "slot_type": "compliance",
+                "cell_coordinate": "C10",
+                "has_formula": False,
+            }
+        },
+    }
+
+    # Even in offline deterministic fallback, if LLM is offline, extracted_value is NOT_SPECIFIED so state remains NOT_FOUND
+    fallback_dec = resolve_requirement(req, use_ollama=False)
+    assert fallback_dec["compliance_state"] == "NOT_FOUND"
+
+    # When raw value is extracted as 64 GB:
+    extracted_val = "64 GB"
+    pair = extract_numeric_value_and_unit(extracted_val)
+    assert pair == (64.0, "gb")
+
+    parsed = parse_numeric_constraint("Should provide at least 32 GB RAM per compute node")
+    assert parsed is not None
+    op, req_v, req_u = parsed
+    off_v, off_u = pair
+    assert evaluate_numeric_compliance(op, req_v, req_u, off_v, off_u) == "COMPLIANT"
+
+
 
 
