@@ -2,9 +2,9 @@
 
 help:
 	@echo Available commands:
-	@echo   make run            - Start both Backend and Frontend in separate windows
+	@echo   make run            - Start both Backend (8000) and Frontend (3000) in separate windows
 	@echo   make run-api        - Start FastAPI backend server (port 8000)
-	@echo   make run-frontend   - Start Streamlit UI frontend (port 8501)
+	@echo   make run-frontend   - Start Next.js UI frontend (port 3000)
 	@echo   make stop           - Stop all running backend and frontend processes
 	@echo   make seed           - Seed initial admin user in database
 	@echo   make install        - Install requirements
@@ -22,9 +22,9 @@ help:
 	@echo   make migrate-new    - Create new migration (msg="description")
 	@echo   make clean          - Remove Python cache files
 
-# Start both Backend (FastAPI) and Frontend (Streamlit)
+# Start both Backend (FastAPI) and Frontend (Next.js)
 run:
-	@powershell -Command "Start-Process python -ArgumentList '-m uvicorn ai_rfp_excel.app.main:app --host 0.0.0.0 --port 8000 --reload'; Start-Process python -ArgumentList '-m streamlit run ai_rfp_excel/frontend/streamlit_app.py --server.port 8501'; Write-Host 'TenderFlow backend (http://localhost:8000) and frontend (http://localhost:8501) launched!'"
+	@powershell -Command "Start-Process python -ArgumentList '-m uvicorn ai_rfp_excel.app.main:app --host 0.0.0.0 --port 8000 --reload'; Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd frontend; pnpm dev'; Write-Host 'TenderFlow backend (http://localhost:8000) and frontend (http://localhost:3000) launched!'"
 
 run-all: run
 
@@ -33,15 +33,13 @@ run-api:
 	python -m uvicorn ai_rfp_excel.app.main:app --host 0.0.0.0 --port 8000 --reload
 
 run-frontend:
-	python -m streamlit run ai_rfp_excel/frontend/streamlit_app.py --server.port 8501
-
-run-streamlit: run-frontend
+	cd frontend && pnpm dev
 
 run-ui: run-frontend
 
-# Stop All Running Project Processes (Ports 8000 & 8501)
+# Stop All Running Project Processes (Ports 8000 & 3000)
 stop:
-	@powershell -Command "$$conns = Get-NetTCPConnection -LocalPort 8000, 8501 -ErrorAction SilentlyContinue; if ($$conns) { $$conns | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $$_ -Force -ErrorAction SilentlyContinue }; Write-Host 'TenderFlow processes stopped.' } else { Write-Host 'No running TenderFlow processes found.' }"
+	@powershell -Command "$$conns = Get-NetTCPConnection -LocalPort 8000, 3000 -ErrorAction SilentlyContinue; if ($$conns) { $$conns | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $$_ -Force -ErrorAction SilentlyContinue }; Write-Host 'TenderFlow processes stopped.' } else { Write-Host 'No running TenderFlow processes found.' }"
 
 # Seed Admin User
 seed:
