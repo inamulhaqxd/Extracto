@@ -19,13 +19,11 @@ from ai_rfp_excel.app.excel.utils import (
     calculate_workbook_hash,
 )
 from ai_rfp_excel.app.excel.writer import ExcelWriter
-from ai_rfp_excel.app.matching.engine import ComplianceEngine
 from ai_rfp_excel.app.matching.models import ComplianceDecision
 
 router = APIRouter(prefix="/excel", tags=["excel"])
 analyzer = ExcelAnalyzer()
 writer = ExcelWriter()
-compliance_engine = ComplianceEngine()
 
 
 class ExcelUploadResponse(BaseModel):

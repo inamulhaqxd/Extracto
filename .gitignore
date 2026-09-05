@@ -40,8 +40,23 @@ docker-compose.override.yml
 
 # Test outputs
 testworkflowfile/*_populated_*.xlsx
+testworkflowfile/*_populated.xlsx
+testworkflowfile/output/
+pipeline_lab/output/
 Modelfile_qwen
 logs/
+
+# Frontend / Node / Next.js
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+out/
+**/out/
+.pnpm-store/
+**/.pnpm-store/
+*.tsbuildinfo
+next-env.d.ts
 
 # OS
 .DS_Store

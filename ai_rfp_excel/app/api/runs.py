@@ -1,3 +1,5 @@
+import asyncio
+import json
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -13,29 +15,16 @@ from ai_rfp_excel.app.config import settings
 from ai_rfp_excel.app.database.connection import get_db
 from ai_rfp_excel.app.database.models import (
     Document,
-    DocumentPage,
-    ExtractedFact,
     ProcessingRun,
     User,
     Workbook,
 )
-from ai_rfp_excel.app.excel.analyzer import ExcelAnalyzer
-from ai_rfp_excel.app.excel.models import WorkbookAnalysis
-from ai_rfp_excel.app.excel.writer import ExcelWriter
 from ai_rfp_excel.app.logging import get_logger
-from ai_rfp_excel.app.matching.engine import ComplianceEngine
-from ai_rfp_excel.app.matching.models import (
-    ComplianceDecision,
-    ComplianceState,
-    FactItem,
-)
+from ai_rfp_excel.app.pipeline.orchestrator import PipelineOrchestrator
+from ai_rfp_excel.app.pipeline.step5_excel_populator import populate_excel
 
 logger = get_logger("api.runs")
 router = APIRouter(prefix="/runs", tags=["runs"])
-
-excel_analyzer = ExcelAnalyzer()
-excel_writer = ExcelWriter()
-compliance_engine = ComplianceEngine()
 
 
 class CreateRunRequest(BaseModel):
@@ -132,207 +121,71 @@ async def execute_pipeline_background(
         if not wb_path.exists():
             raise FileNotFoundError(f"Workbook file {wb_path} not found")
 
-        analysis: WorkbookAnalysis = excel_analyzer.analyze_workbook(
-            file_path=str(wb_path),
-            workbook_id=str(wb_id),
-            version=wb_record.version,
-        )
+        # Step 3: Locate PDF document file
+        doc_res = await db.execute(select(Document).where(Document.id == pdf_doc_id))
+        doc_rec = doc_res.scalar_one_or_none()
+        if not doc_rec:
+            raise ValueError(f"PDF Document {pdf_doc_id} not found")
 
-        run.progress = 30.0
-        run.current_step = "Extracting technical specifications from reference PDF"
-        await db.commit()
+        pdf_path = Path(settings.UPLOAD_DIR) / doc_rec.filename
+        if not pdf_path.exists():
+            pdf_path = Path(settings.UPLOAD_DIR) / f"{pdf_doc_id}.pdf"
+        if not pdf_path.exists():
+            raise FileNotFoundError(f"PDF file {pdf_path} not found")
 
-        # Step 3: Fetch facts / pages from PDF document, or extract if not yet ingested
-        facts: list[FactItem] = []
-        facts_res = await db.execute(select(ExtractedFact).where(ExtractedFact.document_id == pdf_doc_id))
-        db_facts = facts_res.scalars().all()
-        for f in db_facts:
-            facts.append(
-                FactItem(
-                    id=str(f.id),
-                    field_name=f.field_name,
-                    value=f.normalized_value or f.original_value,
-                    source_document_id=str(f.document_id),
-                    source_page=f.source_page,
-                    source_table_id=f.source_table_id,
-                    source_image_id=f.source_image_id,
-                    source_type=f.source_type,
-                    confidence=f.confidence,
-                    extraction_method=f.extraction_method,
-                    metadata_json=f.metadata_json,
-                )
-            )
+        output_dir = Path(settings.GENERATED_DIR) / str(run_id)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        out_excel_path = output_dir / f"{wb_path.stem}_populated.xlsx"
 
-        if not facts:
-            # Fallback to document pages text or extract directly from PDF file
-            pages_res = await db.execute(select(DocumentPage).where(DocumentPage.document_id == pdf_doc_id))
-            db_pages = pages_res.scalars().all()
-            for p in db_pages:
-                text = p.native_text or p.ocr_text
-                if text:
-                    facts.append(
-                        FactItem(
-                            field_name="Technical Spec",
-                            value=text,
-                            source_document_id=str(p.document_id),
-                            source_page=p.page_number,
-                            source_type=p.content_type,
-                            confidence=0.90,
-                        )
-                    )
-
-        if not facts:
-            # Automatically extract text and specs directly from the uploaded PDF file
-            doc_res = await db.execute(select(Document).where(Document.id == pdf_doc_id))
-            doc_rec = doc_res.scalar_one_or_none()
-            if doc_rec:
-                pdf_path = Path(settings.UPLOAD_DIR) / doc_rec.filename
-                if not pdf_path.exists():
-                    pdf_path = Path(settings.UPLOAD_DIR) / f"{pdf_doc_id}.pdf"
-
-                if pdf_path.exists():
-                    pages_text_list: list[tuple[int, str]] = []
-                    try:
-                        import pypdfium2 as pdfium
-                        pdf_obj = pdfium.PdfDocument(str(pdf_path))
-                        for p_idx, p in enumerate(pdf_obj):
-                            pages_text_list.append((p_idx + 1, p.get_textpage().get_text_range() or ""))
-                        pdf_obj.close()
-                    except Exception:
-                        try:
-                            import pdfplumber
-                            with pdfplumber.open(str(pdf_path)) as plumber_pdf:
-                                for p_idx, plumber_page in enumerate(plumber_pdf.pages):
-                                    pages_text_list.append((p_idx + 1, plumber_page.extract_text() or ""))
-                        except Exception:
-                            try:
-                                import fitz
-                                fitz_doc = fitz.open(str(pdf_path))
-                                for p_idx in range(len(fitz_doc)):
-                                    pages_text_list.append((p_idx + 1, fitz_doc[p_idx].get_text() or ""))
-                                fitz_doc.close()
-                            except Exception:
-                                pages_text_list = []
-
-                    for page_index, page_text in pages_text_list:
-                        if page_text and page_text.strip():
-                            doc_page = DocumentPage(
-                                document_id=pdf_doc_id,
-                                page_number=page_index,
-                                content_type="text",
-                                native_text=page_text,
-                                is_scanned=False,
-                            )
-                            db.add(doc_page)
-
-                            # Add whole-page contextual fact
-                            page_overview_fact = FactItem(
-                                field_name=f"Page {page_index} Overview",
-                                value=page_text.strip(),
-                                source_document_id=str(pdf_doc_id),
-                                source_page=page_index,
-                                source_type="text",
-                                confidence=0.90,
-                                extraction_method="pdf_page_context",
-                            )
-                            facts.append(page_overview_fact)
-
-                            # Extract key-value pairs and direct spec lines
-                            lines = [ln.strip() for ln in page_text.split("\n") if len(ln.strip()) >= 3]
-                            for line in lines:
-                                if ":" in line:
-                                    parts = line.split(":", 1)
-                                    f_name = parts[0].strip()
-                                    f_val = parts[1].strip()
-                                else:
-                                    f_name = "Technical Specification"
-                                    f_val = line
-
-                                if f_val:
-                                    fact_item = FactItem(
-                                        field_name=f_name,
-                                        value=f_val,
-                                        source_document_id=str(pdf_doc_id),
-                                        source_page=page_index,
-                                        source_type="text",
-                                        confidence=0.95,
-                                        extraction_method="pdf_ingestion",
-                                    )
-                                    facts.append(fact_item)
-
-                                    ef = ExtractedFact(
-                                        document_id=pdf_doc_id,
-                                        source_page=page_index,
-                                        field_name=f_name,
-                                        original_value=f_val,
-                                        normalized_value=f_val,
-                                        confidence=0.95,
-                                        extraction_method="pdf_ingestion",
-                                        source_type="text",
-                                    )
-                                    db.add(ef)
-                    await db.commit()
-
-        run.progress = 50.0
-        run.current_step = f"Evaluating {analysis.total_requirements} requirements with Compliance Engine"
-        await db.commit()
-
-        # Step 4: Evaluate requirements against facts
-        all_decisions: list[ComplianceDecision] = []
-        all_requirements = [req for s in analysis.sheets for req in s.requirements]
-        total_reqs = len(all_requirements)
-
-        for idx, req in enumerate(all_requirements, start=1):
-            # Check if run was cancelled in the meantime
-            chk_res = await db.execute(select(ProcessingRun.status).where(ProcessingRun.id == run_id))
-            curr_status = chk_res.scalar_one_or_none()
-            if curr_status == "cancelled":
-                logger.info("Run was cancelled during processing", run_id=str(run_id))
-                return
-
-            dec = await compliance_engine.evaluate_requirement(
-                requirement_text=req.requirement_text,
-                facts=facts,
-                vendor_name=vendor_name,
-                model_name=model_name,
-                requirement_id=req.requirement_id,
-            )
-            all_decisions.append(dec)
-
-            # Update progress incrementally
-            progress_pct = 50.0 + (35.0 * (idx / max(total_reqs, 1)))
-            run.progress = round(progress_pct, 1)
-            run.current_step = f"Evaluating requirement {idx}/{total_reqs}: {req.requirement_text[:40]}..."
+        async def on_progress(progress: float, message: str) -> None:
+            chk = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_id))
+            curr_run = chk.scalar_one_or_none()
+            if not curr_run or curr_run.status == "cancelled":
+                raise asyncio.CancelledError("Run cancelled by user")
+            curr_run.progress = progress
+            curr_run.current_step = message
             await db.commit()
 
-        # Step 5: Populate initial Excel output and validate
-        run.progress = 90.0
-        run.current_step = "Populating Excel workbook and generating Compliance Summary"
-        await db.commit()
-
-        pop_result = excel_writer.populate_workbook(
-            template_path=wb_path,
-            analysis=analysis,
-            decisions=all_decisions,
-            create_summary=include_summary_sheet,
+        orchestrator = PipelineOrchestrator(progress_callback=on_progress)
+        pipeline_res = await orchestrator.run(
+            pdf_path=pdf_path,
+            excel_path=wb_path,
+            output_dir=output_dir,
+            output_excel_path=out_excel_path,
+            model_name=model_name,
         )
 
-        # Step 6: Complete run record
-        run.status = "completed"
-        run.progress = 100.0
-        run.current_step = "Completed successfully. Ready for review and download."
-        run.completed_at = datetime.now()
-        run.metadata_json = {
+        decisions_json_path = output_dir / "compliance_decisions.json"
+        raw_decisions: list[dict[str, Any]] = []
+        if decisions_json_path.exists():
+            with open(decisions_json_path, "r", encoding="utf-8") as f:
+                dec_data = json.load(f)
+                raw_decisions = dec_data.get("decisions", [])
+
+        run_res_final = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_id))
+        final_run = run_res_final.scalar_one_or_none()
+        if not final_run:
+            return
+
+        final_run.status = "completed"
+        final_run.progress = 100.0
+        final_run.current_step = "Completed successfully. Ready for review and download."
+        final_run.completed_at = datetime.now()
+        final_run.metadata_json = {
             "vendor_name": vendor_name,
-            "generated_file": pop_result.filename,
-            "generated_file_path": pop_result.output_file_path,
-            "total_requirements": total_reqs,
-            "decisions": [d.model_dump() for d in all_decisions],
-            "validation": pop_result.validation_report.model_dump(),
+            "pdf_filename": doc_rec.original_filename,
+            "workbook_filename": wb_record.original_filename,
+            "generated_file": out_excel_path.name,
+            "generated_file_path": str(out_excel_path),
+            "total_requirements": pipeline_res.total_requirements,
+            "decisions": raw_decisions,
+            "manifest": pipeline_res.manifest,
         }
         await db.commit()
-        logger.info("Pipeline run completed successfully", run_id=str(run_id), generated_file=pop_result.filename)
+        logger.info("Pipeline run completed successfully", run_id=str(run_id), generated_file=out_excel_path.name)
 
+    except asyncio.CancelledError:
+        logger.info("Pipeline run cancelled by user", run_id=str(run_id))
     except Exception as e:
         logger.error("Pipeline execution failed", run_id=str(run_id), error=str(e), exc_info=True)
         run_res = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_id))
@@ -447,8 +300,9 @@ async def get_run_status(
     low_conf_cnt = 0
 
     for d in raw_decisions:
-        state_val = str(d.get("state", "NOT_FOUND"))
+        state_val = str(d.get("compliance_state") or d.get("state") or d.get("status") or "NOT_FOUND")
         conf = float(d.get("confidence", 1.0))
+        m_val = d.get("extracted_value") or d.get("matched_value")
 
         if "COMPLIANT" in state_val and "NON" not in state_val and "PARTIAL" not in state_val:
             comp_cnt += 1
@@ -459,7 +313,7 @@ async def get_run_status(
         else:
             nf_cnt += 1
 
-        if conf < 0.70:
+        if conf < 0.70 or d.get("needs_review"):
             low_conf_cnt += 1
 
         decisions_list.append(
@@ -470,10 +324,10 @@ async def get_run_status(
                 status=state_val,
                 confidence=conf,
                 reasoning=d.get("reasoning"),
-                matched_value=d.get("matched_value"),
+                matched_value=m_val,
                 resolving_layer=d.get("resolving_layer"),
                 evidence=d.get("evidence", []),
-                needs_review=conf < 0.70 or "AMBIGUOUS" in state_val,
+                needs_review=bool(d.get("needs_review") or conf < 0.70 or "AMBIGUOUS" in state_val),
                 review_notes=d.get("review_notes"),
             )
         )
@@ -548,26 +402,26 @@ async def submit_run_review(
     reviews_by_req = {r.requirement_id: r for r in review_req.reviews}
 
     # Apply overrides
-    updated_decisions: list[ComplianceDecision] = []
+    updated_decisions: list[dict[str, Any]] = []
     for d_dict in decisions_raw:
-        req_id = d_dict.get("requirement_id")
-        dec = ComplianceDecision(**d_dict)
+        item = dict(d_dict)
+        req_id = item.get("requirement_id")
 
         if req_id in reviews_by_req:
             rev = reviews_by_req[req_id]
-            # Map status string to ComplianceState
-            for state in ComplianceState:
-                if state.value.lower() == rev.status.lower() or state.name.lower() == rev.status.lower():
-                    dec.state = state
-                    break
+            item["compliance_state"] = rev.status.upper()
+            item["status"] = rev.status.upper()
             if rev.matched_value is not None:
-                dec.matched_value = rev.matched_value
+                item["extracted_value"] = rev.matched_value
+                item["matched_value"] = rev.matched_value
             if rev.confidence is not None:
-                dec.confidence = rev.confidence
+                item["confidence"] = rev.confidence
             if rev.review_notes:
-                dec.reasoning = f"{dec.reasoning} [Reviewer Note: {rev.review_notes}]"
+                item["review_notes"] = rev.review_notes
+                item["reasoning"] = f"{item.get('reasoning', '')} [Reviewer Note: {rev.review_notes}]"
+            item["needs_review"] = False
 
-        updated_decisions.append(dec)
+        updated_decisions.append(item)
 
     # Re-populate workbook with updated decisions
     if run.workbook_id:
@@ -575,12 +429,18 @@ async def submit_run_review(
         wb_rec = wb_res.scalar_one_or_none()
         if wb_rec:
             wb_path = Path(settings.UPLOAD_DIR) / wb_rec.filename
-            analysis = excel_analyzer.analyze_workbook(str(wb_path), str(wb_rec.id), wb_rec.version)
-            pop_res = excel_writer.populate_workbook(wb_path, analysis, updated_decisions)
-            meta["generated_file"] = pop_res.filename
-            meta["generated_file_path"] = pop_res.output_file_path
+            output_dir = Path(settings.GENERATED_DIR) / str(run_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            decisions_json_path = output_dir / "compliance_decisions.json"
+            with open(decisions_json_path, "w", encoding="utf-8") as f:
+                json.dump({"decisions": updated_decisions}, f, indent=2, ensure_ascii=False)
+            out_excel_path = output_dir / f"{wb_path.stem}_populated.xlsx"
+            manifest_json_path = output_dir / "population_manifest.json"
+            populate_excel(wb_path, decisions_json_path, out_excel_path, manifest_json_path)
+            meta["generated_file"] = out_excel_path.name
+            meta["generated_file_path"] = str(out_excel_path)
 
-    meta["decisions"] = [d.model_dump() for d in updated_decisions]
+    meta["decisions"] = updated_decisions
     run.metadata_json = meta
     await db.commit()
 

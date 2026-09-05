@@ -49,23 +49,16 @@ services:
     networks:
       - tender_network
 
-  streamlit:
+  frontend:
     build:
       context: ..
       dockerfile: ai_rfp_excel/Dockerfile.frontend
-    container_name: tender_streamlit
+    container_name: tender_frontend
     restart: unless-stopped
     ports:
-      - "${STREAMLIT_PORT:-8501}:8501"
-    env_file:
-      - .env
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      API_BASE_URL: http://api:8000
-    volumes:
-      - ../ai_rfp_excel:/app/ai_rfp_excel
-      - ../ai_rfp_excel/frontend:/app/frontend
-      - ../.streamlit:/app/.streamlit
-    command: ["python", "-m", "streamlit", "run", "frontend/streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.runOnSave=true", "--server.fileWatcherType=poll"]
+      NEXT_PUBLIC_API_URL: http://localhost:8000
     depends_on:
       - api
     networks:
