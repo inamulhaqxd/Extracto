@@ -1,0 +1,47 @@
+{
+  "document_id": "HIGH_multisite_outage_report",
+  "source_file": "C:\\Users\\Inam\\OneDrive\\Desktop\\tender\\testworkflowfile\\HIGH_multisite_outage_report.pdf",
+  "total_pages": 2,
+  "pages": [
+    {
+      "page_number": 1,
+      "text": "Multi-Site Outage Post-Incident Report — INC-3312\nAffected Sites: DC-North, DC-South\nExecutive Summary\nA regional fiber cut on 22 July disrupted connectivity between DC-North and DC-South, triggering\ncascading effects at both sites due to a shared authentication service that was, contrary to design\nintent, only deployed at DC-North without a local fallback at DC-South. This report documents both\nsites' timelines, impact, and root cause separately, since the two sites experienced different failure\nmodes despite sharing a single triggering event.\nDC-North Timeline\n14:02 — Fiber cut occurs on the regional transport ring due to third-party construction work; automated\nalert fires within 90 seconds on transport monitoring.\n14:05 — DC-North duty engineer acknowledges the alert and confirms loss of the primary transport\npath to DC-South.\n14:08 — Automatic failover to the backup microwave transport link begins; DC-North's own services\nremain unaffected since authentication is locally hosted.\n14:11 — Failover completes; DC-North reports normal operation throughout, aside from the brief\n3-minute failover window during which cross-site replication was paused.\n14:20 — DC-North engineering confirms no customer-facing impact at their site.\nDC-South Timeline\n14:02 — Same fiber cut occurs; DC-South's authentication requests, which depend on the\nDC-North-hosted authentication service, begin timing out.\n14:04 — Customer login failures begin appearing across DC-South-hosted applications; monitoring\nshows failure rate climbing from 0% to 40% within two minutes.\n14:09 — DC-South on-call escalates to the authentication platform team, who were not initially aware of\nthe fiber cut since their alerts are scoped to application-layer errors, not transport-layer events.\n14:17 — Platform team identifies that DC-South has no local authentication fallback and begins\nmanually redirecting authentication traffic over the (now-recovered) microwave backup link shared with\nDC-North's transport recovery.\n14:34 — Authentication traffic successfully rerouted; login failure rate drops to under 2%.\n14:41 — Failure rate confirmed at 0%; DC-South incident declared resolved. Total customer-facing\nimpact window at DC-South: from first failure to resolution.\nImpact Summary Table\nSite Customer-Facing Impact Peak Failure Rate Root Contributing Factor\nDC-North None (internal failover only) 0% N/A — transport redundancy worked as designed\nDC-South Login failures 40% No local authentication fallback\nRoot Cause Analysis",
+      "tables": [
+        {
+          "table_id": "T01-01",
+          "headers": [
+            "Site",
+            "Customer-Facing Impact",
+            "Peak Failure Rate",
+            "Root Contributing Factor"
+          ],
+          "rows": [
+            [
+              "DC-North",
+              "None (internal failover only)",
+              "0%",
+              "N/A — transport redundancy worked as designed"
+            ],
+            [
+              "DC-South",
+              "Login failures",
+              "40%",
+              "No local authentication fallback"
+            ]
+          ]
+        }
+      ],
+      "images": [],
+      "ocr": [],
+      "vision_analysis": []
+    },
+    {
+      "page_number": 2,
+      "text": "The triggering event — a third-party fiber cut — was outside the organization's control and is not\nconsidered part of the root cause. The actual root cause is an architectural gap: the authentication\nservice was designed to be deployed redundantly at both sites, per the original 2023 design document,\nbut the DC-South deployment was deprioritized during the original rollout and never completed. This\ngap had not caused a visible incident before because DC-North and DC-South transport connectivity\nhad not previously failed since the microwave backup link was commissioned two years ago. The delay\nbetween the fiber cut and traffic rerouting (14:02 to 14:34 at DC-South) was extended by the platform\nteam's initial lack of awareness of the transport-layer event, since application monitoring and transport\nmonitoring are currently on separate alerting systems with no cross-linking.\nFollow-up Actions\n(1) Complete the deferred DC-South local authentication deployment, closing the original 2023 design\ngap — assigned to the platform team, 6-week deadline. (2) Cross-link transport-layer alerts to\napplication-layer on-call rotations so a transport event automatically notifies affected application teams\n— assigned to the monitoring team, 3-week deadline. (3) Conduct a full redundancy audit of all shared\nservices between DC-North and DC-South to identify any other single-site dependencies — assigned\nto the architecture team, 8-week deadline.",
+      "tables": [],
+      "images": [],
+      "ocr": [],
+      "vision_analysis": []
+    }
+  ]
+}

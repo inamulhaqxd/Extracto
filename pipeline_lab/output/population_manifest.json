@@ -1,9 +1,9 @@
 {
-  "document_id": "MEDIUM_datacenter_power_cooling",
-  "workbook_id": "MEDIUM_datacenter_power_cooling_questions",
-  "source_file": "C:\\Users\\Inam\\OneDrive\\Desktop\\tender\\pipeline_lab\\input\\MEDIUM_datacenter_power_cooling_questions.xlsx",
-  "output_excel_file": "C:\\Users\\Inam\\OneDrive\\Desktop\\tender\\pipeline_lab\\output\\populated_MEDIUM_datacenter_power_cooling_questions.xlsx",
-  "generated_at": "2026-09-04T08:45:53.532615+00:00",
+  "document_id": "HIGH_multisite_outage_report",
+  "workbook_id": "HIGH_multisite_outage_report_questions",
+  "source_file": "testworkflowfile\\HIGH_multisite_outage_report_questions.xlsx",
+  "output_excel_file": "pipeline_lab\\output\\populated_benchmark.xlsx",
+  "generated_at": "2026-09-04T23:46:05.742039+00:00",
   "total_requirements": 12,
   "total_cells_updated": 24,
   "unique_cells_updated": 24,
@@ -24,7 +24,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "B4",
       "slot_type": "answer",
-      "value": "2 utility power feeds provide N+1 redundancy",
+      "value": "The triggering event \u2014 a third-party fiber cut \u2014 was outside the organization's control and is not considered part of the root cause.",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -33,7 +33,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "C4",
       "slot_type": "remarks",
-      "value": "Page 1, Section 3.2",
+      "value": "Page 1, Section Executive Summary",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -42,7 +42,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "B5",
       "slot_type": "answer",
-      "value": "Each diesel generator is rated at 1.2 MW.",
+      "value": "No customer-facing impact; transport redundancy worked as designed",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -51,7 +51,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "C5",
       "slot_type": "remarks",
-      "value": "Page 1, Section 2.1",
+      "value": "Page 1, Section DC-North Timeline",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -60,7 +60,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "B6",
       "slot_type": "answer",
-      "value": "2N topology per server hall",
+      "value": "40%",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -69,7 +69,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "C6",
       "slot_type": "remarks",
-      "value": "Page 1, Text",
+      "value": "Page 1, Table T01-01",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -78,7 +78,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "B7",
       "slot_type": "answer",
-      "value": "Battery runtime at full load is 12 minutes.",
+      "value": "37 minutes",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -87,7 +87,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "C7",
       "slot_type": "remarks",
-      "value": "Page 1, Section 2.2",
+      "value": "Page 1, Section Impact Summary Table",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -96,7 +96,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "B8",
       "slot_type": "answer",
-      "value": "Supply air temperature is maintained at 22\u00b0C (72\u00b0F)",
+      "value": "No local authentication fallback",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -105,7 +105,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "C8",
       "slot_type": "remarks",
-      "value": "Page 1, Section 3.2",
+      "value": "Page 1, Section Executive Summary",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -114,7 +114,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "B9",
       "slot_type": "answer",
-      "value": "PUE is calculated as Total Facility Power divided by IT Equipment Power. The facility's measured PUE over the past 12 months averaged 1.35, meaning for every 1 kW consumed by IT equipment, an additional 0.35 kW is consumed by cooling, power distribution losses, and other overhead. The facility's target PUE, set as part of the annual efficiency goal, is 1.25.",
+      "value": "The delay between the fiber cut and traffic rerouting (14:02 to 14:34 at DC-South) was extended by the platform team's initial lack of awareness of the transport-layer event, since application monitoring and transport monitoring are currently on separate alerting systems with no cross-linking.",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -123,7 +123,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "C9",
       "slot_type": "remarks",
-      "value": "Page 1, Section 4.1",
+      "value": "Page 2, Section Follow-up Actions",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -132,7 +132,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "B10",
       "slot_type": "answer",
-      "value": "1.25",
+      "value": "3 minutes; cross-site replication paused",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -141,7 +141,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "C10",
       "slot_type": "remarks",
-      "value": "Page 1, Section 4.1",
+      "value": "Page 1, Section DC-North Timeline",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -150,7 +150,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "B11",
       "slot_type": "answer",
-      "value": "Hall D (new) has the least available IT load capacity remaining.",
+      "value": "DC-South had design gap; DC-North had transient failover delay",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -159,7 +159,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "C11",
       "slot_type": "remarks",
-      "value": "Page 1, Table T01-01",
+      "value": "Page 1, Section Executive Summary",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -168,7 +168,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "B12",
       "slot_type": "answer",
-      "value": "Hall D has 65 racks and uses In-row chilled water + rear-door heat exchangers for cooling.",
+      "value": "3 follow-up actions; 6-week, 3-week, 8-week deadlines",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -177,7 +177,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "C12",
       "slot_type": "remarks",
-      "value": "Page 1, Table T01-01",
+      "value": "Page 2, Section Follow-up Actions",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -186,7 +186,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "B13",
       "slot_type": "answer",
-      "value": "Semi-annual service for all three chillers falls in the third week of next month",
+      "value": "Monitoring team",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -195,7 +195,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "C13",
       "slot_type": "remarks",
-      "value": "Page 2, Section 6. Maintenance Schedule",
+      "value": "Page 2, Section Follow-up Actions",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -204,7 +204,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "B14",
       "slot_type": "answer",
-      "value": "Hall D's cooling system, being newly commissioned, follows a more frequent monthly inspection schedule for its first year of operation.",
+      "value": "No, it had not happened before; transport connectivity had not failed previously",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -213,7 +213,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "C14",
       "slot_type": "remarks",
-      "value": "Page 2, Table T01-01",
+      "value": "Page 1, Section Executive Summary",
       "needs_review": false,
       "highlighted": false,
       "is_merged": false
@@ -231,7 +231,7 @@
       "sheet_name": "Extraction",
       "cell_coordinate": "C15",
       "slot_type": "remarks",
-      "value": "Page 2, Section 4.1",
+      "value": "NOT_SPECIFIED",
       "needs_review": true,
       "highlighted": true,
       "is_merged": false

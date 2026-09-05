@@ -1,0 +1,98 @@
+[
+  {
+    "requirement_id": "REQ-S01-R001",
+    "sheet_name": "Extraction",
+    "row_number": "4",
+    "section": "",
+    "requirement_text": "What triggered both sites' incidents?",
+    "source_cell": "A4"
+  },
+  {
+    "requirement_id": "REQ-S01-R002",
+    "sheet_name": "Extraction",
+    "row_number": "5",
+    "section": "",
+    "requirement_text": "Did DC-North have any customer-facing impact? Why or why not?",
+    "source_cell": "A5"
+  },
+  {
+    "requirement_id": "REQ-S01-R003",
+    "sheet_name": "Extraction",
+    "row_number": "6",
+    "section": "",
+    "requirement_text": "What was the peak login failure rate at DC-South?",
+    "source_cell": "A6"
+  },
+  {
+    "requirement_id": "REQ-S01-R004",
+    "sheet_name": "Extraction",
+    "row_number": "7",
+    "section": "",
+    "requirement_text": "Calculate the total customer-facing impact duration at DC-South, from first failure to resolution.",
+    "source_cell": "A7"
+  },
+  {
+    "requirement_id": "REQ-S01-R005",
+    "sheet_name": "Extraction",
+    "row_number": "8",
+    "section": "",
+    "requirement_text": "Why did DC-South have no local authentication fallback, according to the root cause section?",
+    "source_cell": "A8"
+  },
+  {
+    "requirement_id": "REQ-S01-R006",
+    "sheet_name": "Extraction",
+    "row_number": "9",
+    "section": "",
+    "requirement_text": "Why did it take until 14:09 for the platform team to be engaged, rather than sooner?",
+    "source_cell": "A9"
+  },
+  {
+    "requirement_id": "REQ-S01-R007",
+    "sheet_name": "Extraction",
+    "row_number": "10",
+    "section": "",
+    "requirement_text": "How long was the DC-North failover window, and what was paused during that window?",
+    "source_cell": "A10"
+  },
+  {
+    "requirement_id": "REQ-S01-R008",
+    "sheet_name": "Extraction",
+    "row_number": "11",
+    "section": "",
+    "requirement_text": "Compare the two sites: which one's outage was caused by a design gap versus a transient failover delay?",
+    "source_cell": "A11"
+  },
+  {
+    "requirement_id": "REQ-S01-R009",
+    "sheet_name": "Extraction",
+    "row_number": "12",
+    "section": "",
+    "requirement_text": "How many follow-up actions were assigned in total, and what are their deadlines?",
+    "source_cell": "A12"
+  },
+  {
+    "requirement_id": "REQ-S01-R010",
+    "sheet_name": "Extraction",
+    "row_number": "13",
+    "section": "",
+    "requirement_text": "Which team is responsible for the transport/application alert cross-linking fix?",
+    "source_cell": "A13"
+  },
+  {
+    "requirement_id": "REQ-S01-R011",
+    "sheet_name": "Extraction",
+    "row_number": "14",
+    "section": "",
+    "requirement_text": "Has this exact type of incident happened before at these two sites? What does the document say?",
+    "source_cell": "A14"
+  },
+  {
+    "requirement_id": "REQ-S01-R012",
+    "sheet_name": "Extraction",
+    "row_number": "15",
+    "section": "",
+    "requirement_text": "What was the total financial cost of this incident?",
+    "source_cell": "A15"
+  }
+]

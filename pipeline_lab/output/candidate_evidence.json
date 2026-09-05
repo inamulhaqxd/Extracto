@@ -1,0 +1,767 @@
+{
+  "document_id": "HIGH_multisite_outage_report",
+  "workbook_id": "HIGH_multisite_outage_report_questions",
+  "total_requirements": 12,
+  "requirements_with_evidence": 12,
+  "items": [
+    {
+      "requirement_id": "REQ-S01-R001",
+      "sheet_name": "Extraction",
+      "row_number": 4,
+      "section": null,
+      "requirement_text": "What triggered both sites' incidents?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B4",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C4",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "Executive Summary A regional fiber cut on 22 July disrupted connectivity between DC-North and DC-South, triggering cascading effects at both sites due to a shared authentication service that was, contrary to design intent, only deployed at DC-North without a local fallback at DC-South. This report documents both sites' timelines, impact, and root cause separately, since the two sites experienced different failure modes despite sharing a single triggering event.",
+          "score": 52.07,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "The triggering event \u2014 a third-party fiber cut \u2014 was outside the organization's control and is not considered part of the root cause. The actual root cause is an architectural gap: the authentication service was designed to be deployed redundantly at both sites, per the original 2023 design document, but the DC-South deployment was deprioritized during the original rollout and never completed. This gap had not caused a visible incident before because DC-North and DC-South transport connectivity had not previously failed since the microwave backup link was commissioned two years ago. The delay between the fiber cut and traffic rerouting (14:02 to 14:34 at DC-South) was extended by the platform team's initial lack of awareness of the transport-layer event, since application monitoring and transport monitoring are currently on separate alerting systems with no cross-linking.",
+          "score": 49.79,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "Multi-Site Outage Post-Incident Report \u2014 INC-3312 Affected Sites: DC-North, DC-South",
+          "score": 49.79,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R002",
+      "sheet_name": "Extraction",
+      "row_number": 5,
+      "section": null,
+      "requirement_text": "Did DC-North have any customer-facing impact? Why or why not?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B5",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C5",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "DC-North Timeline 14:02 \u2014 Fiber cut occurs on the regional transport ring due to third-party construction work; automated alert fires within 90 seconds on transport monitoring. 14:05 \u2014 DC-North duty engineer acknowledges the alert and confirms loss of the primary transport path to DC-South. 14:08 \u2014 Automatic failover to the backup microwave transport link begins; DC-North's own services remain unaffected since authentication is locally hosted. 14:11 \u2014 Failover completes; DC-North reports normal operation throughout, aside from the brief 3-minute failover window during which cross-site replication was paused. 14:20 \u2014 DC-North engineering confirms no customer-facing impact at their site.",
+          "score": 84.11,
+          "table_id": null,
+          "exact_matches": [
+            "DC-North",
+            "customer-facing"
+          ]
+        },
+        {
+          "page_number": 1,
+          "source_type": "table",
+          "snippet": "Table T01-01 (Row 1) -> Site: DC-North | Customer-Facing Impact: None (internal failover only) | Peak Failure Rate: 0% | Root Contributing Factor: N/A \u2014 transport redundancy worked as designed",
+          "score": 83.75,
+          "table_id": "T01-01",
+          "exact_matches": [
+            "DC-North",
+            "customer-facing"
+          ]
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "Impact Summary Table Site Customer-Facing Impact Peak Failure Rate Root Contributing Factor DC-North None (internal failover only) 0% N/A \u2014 transport redundancy worked as designed DC-South Login failures 40% No local authentication fallback",
+          "score": 83.27,
+          "table_id": null,
+          "exact_matches": [
+            "DC-North",
+            "customer-facing"
+          ]
+        }
+      ],
+      "deterministic_hits": [
+        "DC-North",
+        "customer-facing"
+      ],
+      "top_page_numbers": [
+        1
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R003",
+      "sheet_name": "Extraction",
+      "row_number": 6,
+      "section": null,
+      "requirement_text": "What was the peak login failure rate at DC-South?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B6",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C6",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "table",
+          "snippet": "Table T01-01 (Row 2) -> Site: DC-South | Customer-Facing Impact: Login failures | Peak Failure Rate: 40% | Root Contributing Factor: No local authentication fallback",
+          "score": 89.9,
+          "table_id": "T01-01",
+          "exact_matches": [
+            "DC-South"
+          ]
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "DC-South Timeline 14:02 \u2014 Same fiber cut occurs; DC-South's authentication requests, which depend on the DC-North-hosted authentication service, begin timing out. 14:04 \u2014 Customer login failures begin appearing across DC-South-hosted applications; monitoring shows failure rate climbing from 0% to 40% within two minutes. 14:09 \u2014 DC-South on-call escalates to the authentication platform team, who were not initially aware of the fiber cut since their alerts are scoped to application-layer errors, not transport-layer events. 14:17 \u2014 Platform team identifies that DC-South has no local authentication fallback and begins manually redirecting authentication traffic over the (now-recovered) microwave backup link shared with DC-North's transport recovery. 14:34 \u2014 Authentication traffic successfully rerouted; login failure rate drops to under 2%. 14:41 \u2014 Failure rate confirmed at 0%; DC-South incident declared resolved. Total customer-facing impact window at DC-South: from first failure to resolution.",
+          "score": 89.34,
+          "table_id": null,
+          "exact_matches": [
+            "DC-South"
+          ]
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "Impact Summary Table Site Customer-Facing Impact Peak Failure Rate Root Contributing Factor DC-North None (internal failover only) 0% N/A \u2014 transport redundancy worked as designed DC-South Login failures 40% No local authentication fallback",
+          "score": 88.56,
+          "table_id": null,
+          "exact_matches": [
+            "DC-South"
+          ]
+        }
+      ],
+      "deterministic_hits": [
+        "DC-South"
+      ],
+      "top_page_numbers": [
+        1
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R004",
+      "sheet_name": "Extraction",
+      "row_number": 7,
+      "section": null,
+      "requirement_text": "Calculate the total customer-facing impact duration at DC-South, from first failure to resolution.",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B7",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C7",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "Impact Summary Table Site Customer-Facing Impact Peak Failure Rate Root Contributing Factor DC-North None (internal failover only) 0% N/A \u2014 transport redundancy worked as designed DC-South Login failures 40% No local authentication fallback",
+          "score": 88.07,
+          "table_id": null,
+          "exact_matches": [
+            "customer-facing",
+            "DC-South"
+          ]
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "DC-South Timeline 14:02 \u2014 Same fiber cut occurs; DC-South's authentication requests, which depend on the DC-North-hosted authentication service, begin timing out. 14:04 \u2014 Customer login failures begin appearing across DC-South-hosted applications; monitoring shows failure rate climbing from 0% to 40% within two minutes. 14:09 \u2014 DC-South on-call escalates to the authentication platform team, who were not initially aware of the fiber cut since their alerts are scoped to application-layer errors, not transport-layer events. 14:17 \u2014 Platform team identifies that DC-South has no local authentication fallback and begins manually redirecting authentication traffic over the (now-recovered) microwave backup link shared with DC-North's transport recovery. 14:34 \u2014 Authentication traffic successfully rerouted; login failure rate drops to under 2%. 14:41 \u2014 Failure rate confirmed at 0%; DC-South incident declared resolved. Total customer-facing impact window at DC-South: from first failure to resolution.",
+          "score": 87.41,
+          "table_id": null,
+          "exact_matches": [
+            "customer-facing",
+            "DC-South"
+          ]
+        },
+        {
+          "page_number": 1,
+          "source_type": "table",
+          "snippet": "Table T01-01 (Row 2) -> Site: DC-South | Customer-Facing Impact: Login failures | Peak Failure Rate: 40% | Root Contributing Factor: No local authentication fallback",
+          "score": 86.01,
+          "table_id": "T01-01",
+          "exact_matches": [
+            "customer-facing",
+            "DC-South"
+          ]
+        }
+      ],
+      "deterministic_hits": [
+        "DC-South",
+        "customer-facing"
+      ],
+      "top_page_numbers": [
+        1
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R005",
+      "sheet_name": "Extraction",
+      "row_number": 8,
+      "section": null,
+      "requirement_text": "Why did DC-South have no local authentication fallback, according to the root cause section?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B8",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C8",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "table",
+          "snippet": "Table T01-01 (Row 2) -> Site: DC-South | Customer-Facing Impact: Login failures | Peak Failure Rate: 40% | Root Contributing Factor: No local authentication fallback",
+          "score": 89.23,
+          "table_id": "T01-01",
+          "exact_matches": [
+            "DC-South"
+          ]
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "Executive Summary A regional fiber cut on 22 July disrupted connectivity between DC-North and DC-South, triggering cascading effects at both sites due to a shared authentication service that was, contrary to design intent, only deployed at DC-North without a local fallback at DC-South. This report documents both sites' timelines, impact, and root cause separately, since the two sites experienced different failure modes despite sharing a single triggering event.",
+          "score": 86.95,
+          "table_id": null,
+          "exact_matches": [
+            "DC-South"
+          ]
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "Impact Summary Table Site Customer-Facing Impact Peak Failure Rate Root Contributing Factor DC-North None (internal failover only) 0% N/A \u2014 transport redundancy worked as designed DC-South Login failures 40% No local authentication fallback",
+          "score": 85.63,
+          "table_id": null,
+          "exact_matches": [
+            "DC-South"
+          ]
+        }
+      ],
+      "deterministic_hits": [
+        "DC-South"
+      ],
+      "top_page_numbers": [
+        1
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R006",
+      "sheet_name": "Extraction",
+      "row_number": 9,
+      "section": null,
+      "requirement_text": "Why did it take until 14:09 for the platform team to be engaged, rather than sooner?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B9",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C9",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "DC-South Timeline 14:02 \u2014 Same fiber cut occurs; DC-South's authentication requests, which depend on the DC-North-hosted authentication service, begin timing out. 14:04 \u2014 Customer login failures begin appearing across DC-South-hosted applications; monitoring shows failure rate climbing from 0% to 40% within two minutes. 14:09 \u2014 DC-South on-call escalates to the authentication platform team, who were not initially aware of the fiber cut since their alerts are scoped to application-layer errors, not transport-layer events. 14:17 \u2014 Platform team identifies that DC-South has no local authentication fallback and begins manually redirecting authentication traffic over the (now-recovered) microwave backup link shared with DC-North's transport recovery. 14:34 \u2014 Authentication traffic successfully rerouted; login failure rate drops to under 2%. 14:41 \u2014 Failure rate confirmed at 0%; DC-South incident declared resolved. Total customer-facing impact window at DC-South: from first failure to resolution.",
+          "score": 68.4,
+          "table_id": null,
+          "exact_matches": [
+            "14:09"
+          ]
+        },
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "Follow-up Actions (1) Complete the deferred DC-South local authentication deployment, closing the original 2023 design gap \u2014 assigned to the platform team, 6-week deadline. (2) Cross-link transport-layer alerts to application-layer on-call rotations so a transport event automatically notifies affected application teams \u2014 assigned to the monitoring team, 3-week deadline. (3) Conduct a full redundancy audit of all shared services between DC-North and DC-South to identify any other single-site dependencies \u2014 assigned to the architecture team, 8-week deadline.",
+          "score": 42.08,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "The triggering event \u2014 a third-party fiber cut \u2014 was outside the organization's control and is not considered part of the root cause. The actual root cause is an architectural gap: the authentication service was designed to be deployed redundantly at both sites, per the original 2023 design document, but the DC-South deployment was deprioritized during the original rollout and never completed. This gap had not caused a visible incident before because DC-North and DC-South transport connectivity had not previously failed since the microwave backup link was commissioned two years ago. The delay between the fiber cut and traffic rerouting (14:02 to 14:34 at DC-South) was extended by the platform team's initial lack of awareness of the transport-layer event, since application monitoring and transport monitoring are currently on separate alerting systems with no cross-linking.",
+          "score": 42.04,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [
+        "14:09"
+      ],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R007",
+      "sheet_name": "Extraction",
+      "row_number": 10,
+      "section": null,
+      "requirement_text": "How long was the DC-North failover window, and what was paused during that window?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B10",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C10",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "DC-North Timeline 14:02 \u2014 Fiber cut occurs on the regional transport ring due to third-party construction work; automated alert fires within 90 seconds on transport monitoring. 14:05 \u2014 DC-North duty engineer acknowledges the alert and confirms loss of the primary transport path to DC-South. 14:08 \u2014 Automatic failover to the backup microwave transport link begins; DC-North's own services remain unaffected since authentication is locally hosted. 14:11 \u2014 Failover completes; DC-North reports normal operation throughout, aside from the brief 3-minute failover window during which cross-site replication was paused. 14:20 \u2014 DC-North engineering confirms no customer-facing impact at their site.",
+          "score": 88.44,
+          "table_id": null,
+          "exact_matches": [
+            "DC-North"
+          ]
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "DC-South Timeline 14:02 \u2014 Same fiber cut occurs; DC-South's authentication requests, which depend on the DC-North-hosted authentication service, begin timing out. 14:04 \u2014 Customer login failures begin appearing across DC-South-hosted applications; monitoring shows failure rate climbing from 0% to 40% within two minutes. 14:09 \u2014 DC-South on-call escalates to the authentication platform team, who were not initially aware of the fiber cut since their alerts are scoped to application-layer errors, not transport-layer events. 14:17 \u2014 Platform team identifies that DC-South has no local authentication fallback and begins manually redirecting authentication traffic over the (now-recovered) microwave backup link shared with DC-North's transport recovery. 14:34 \u2014 Authentication traffic successfully rerouted; login failure rate drops to under 2%. 14:41 \u2014 Failure rate confirmed at 0%; DC-South incident declared resolved. Total customer-facing impact window at DC-South: from first failure to resolution.",
+          "score": 84.3,
+          "table_id": null,
+          "exact_matches": [
+            "DC-North"
+          ]
+        },
+        {
+          "page_number": 1,
+          "source_type": "table",
+          "snippet": "Table T01-01 (Row 1) -> Site: DC-North | Customer-Facing Impact: None (internal failover only) | Peak Failure Rate: 0% | Root Contributing Factor: N/A \u2014 transport redundancy worked as designed",
+          "score": 72.9,
+          "table_id": "T01-01",
+          "exact_matches": [
+            "DC-North"
+          ]
+        }
+      ],
+      "deterministic_hits": [
+        "DC-North"
+      ],
+      "top_page_numbers": [
+        1
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R008",
+      "sheet_name": "Extraction",
+      "row_number": 11,
+      "section": null,
+      "requirement_text": "Compare the two sites: which one's outage was caused by a design gap versus a transient failover delay?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B11",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C11",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "The triggering event \u2014 a third-party fiber cut \u2014 was outside the organization's control and is not considered part of the root cause. The actual root cause is an architectural gap: the authentication service was designed to be deployed redundantly at both sites, per the original 2023 design document, but the DC-South deployment was deprioritized during the original rollout and never completed. This gap had not caused a visible incident before because DC-North and DC-South transport connectivity had not previously failed since the microwave backup link was commissioned two years ago. The delay between the fiber cut and traffic rerouting (14:02 to 14:34 at DC-South) was extended by the platform team's initial lack of awareness of the transport-layer event, since application monitoring and transport monitoring are currently on separate alerting systems with no cross-linking.",
+          "score": 61.46,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "Executive Summary A regional fiber cut on 22 July disrupted connectivity between DC-North and DC-South, triggering cascading effects at both sites due to a shared authentication service that was, contrary to design intent, only deployed at DC-North without a local fallback at DC-South. This report documents both sites' timelines, impact, and root cause separately, since the two sites experienced different failure modes despite sharing a single triggering event.",
+          "score": 47.1,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "Multi-Site Outage Post-Incident Report \u2014 INC-3312 Affected Sites: DC-North, DC-South",
+          "score": 42.54,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R009",
+      "sheet_name": "Extraction",
+      "row_number": 12,
+      "section": null,
+      "requirement_text": "How many follow-up actions were assigned in total, and what are their deadlines?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B12",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C12",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "Follow-up Actions (1) Complete the deferred DC-South local authentication deployment, closing the original 2023 design gap \u2014 assigned to the platform team, 6-week deadline. (2) Cross-link transport-layer alerts to application-layer on-call rotations so a transport event automatically notifies affected application teams \u2014 assigned to the monitoring team, 3-week deadline. (3) Conduct a full redundancy audit of all shared services between DC-North and DC-South to identify any other single-site dependencies \u2014 assigned to the architecture team, 8-week deadline.",
+          "score": 82.86,
+          "table_id": null,
+          "exact_matches": [
+            "follow-up"
+          ]
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "DC-South Timeline 14:02 \u2014 Same fiber cut occurs; DC-South's authentication requests, which depend on the DC-North-hosted authentication service, begin timing out. 14:04 \u2014 Customer login failures begin appearing across DC-South-hosted applications; monitoring shows failure rate climbing from 0% to 40% within two minutes. 14:09 \u2014 DC-South on-call escalates to the authentication platform team, who were not initially aware of the fiber cut since their alerts are scoped to application-layer errors, not transport-layer events. 14:17 \u2014 Platform team identifies that DC-South has no local authentication fallback and begins manually redirecting authentication traffic over the (now-recovered) microwave backup link shared with DC-North's transport recovery. 14:34 \u2014 Authentication traffic successfully rerouted; login failure rate drops to under 2%. 14:41 \u2014 Failure rate confirmed at 0%; DC-South incident declared resolved. Total customer-facing impact window at DC-South: from first failure to resolution.",
+          "score": 34.02,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [
+        "follow-up"
+      ],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R010",
+      "sheet_name": "Extraction",
+      "row_number": 13,
+      "section": null,
+      "requirement_text": "Which team is responsible for the transport/application alert cross-linking fix?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B13",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C13",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "The triggering event \u2014 a third-party fiber cut \u2014 was outside the organization's control and is not considered part of the root cause. The actual root cause is an architectural gap: the authentication service was designed to be deployed redundantly at both sites, per the original 2023 design document, but the DC-South deployment was deprioritized during the original rollout and never completed. This gap had not caused a visible incident before because DC-North and DC-South transport connectivity had not previously failed since the microwave backup link was commissioned two years ago. The delay between the fiber cut and traffic rerouting (14:02 to 14:34 at DC-South) was extended by the platform team's initial lack of awareness of the transport-layer event, since application monitoring and transport monitoring are currently on separate alerting systems with no cross-linking.",
+          "score": 83.66,
+          "table_id": null,
+          "exact_matches": [
+            "cross-linking"
+          ]
+        },
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "Follow-up Actions (1) Complete the deferred DC-South local authentication deployment, closing the original 2023 design gap \u2014 assigned to the platform team, 6-week deadline. (2) Cross-link transport-layer alerts to application-layer on-call rotations so a transport event automatically notifies affected application teams \u2014 assigned to the monitoring team, 3-week deadline. (3) Conduct a full redundancy audit of all shared services between DC-North and DC-South to identify any other single-site dependencies \u2014 assigned to the architecture team, 8-week deadline.",
+          "score": 54.47,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "DC-North Timeline 14:02 \u2014 Fiber cut occurs on the regional transport ring due to third-party construction work; automated alert fires within 90 seconds on transport monitoring. 14:05 \u2014 DC-North duty engineer acknowledges the alert and confirms loss of the primary transport path to DC-South. 14:08 \u2014 Automatic failover to the backup microwave transport link begins; DC-North's own services remain unaffected since authentication is locally hosted. 14:11 \u2014 Failover completes; DC-North reports normal operation throughout, aside from the brief 3-minute failover window during which cross-site replication was paused. 14:20 \u2014 DC-North engineering confirms no customer-facing impact at their site.",
+          "score": 44.69,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [
+        "cross-linking"
+      ],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R011",
+      "sheet_name": "Extraction",
+      "row_number": 14,
+      "section": null,
+      "requirement_text": "Has this exact type of incident happened before at these two sites? What does the document say?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B14",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C14",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "The triggering event \u2014 a third-party fiber cut \u2014 was outside the organization's control and is not considered part of the root cause. The actual root cause is an architectural gap: the authentication service was designed to be deployed redundantly at both sites, per the original 2023 design document, but the DC-South deployment was deprioritized during the original rollout and never completed. This gap had not caused a visible incident before because DC-North and DC-South transport connectivity had not previously failed since the microwave backup link was commissioned two years ago. The delay between the fiber cut and traffic rerouting (14:02 to 14:34 at DC-South) was extended by the platform team's initial lack of awareness of the transport-layer event, since application monitoring and transport monitoring are currently on separate alerting systems with no cross-linking.",
+          "score": 57.38,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "Executive Summary A regional fiber cut on 22 July disrupted connectivity between DC-North and DC-South, triggering cascading effects at both sites due to a shared authentication service that was, contrary to design intent, only deployed at DC-North without a local fallback at DC-South. This report documents both sites' timelines, impact, and root cause separately, since the two sites experienced different failure modes despite sharing a single triggering event.",
+          "score": 46.46,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "DC-South Timeline 14:02 \u2014 Same fiber cut occurs; DC-South's authentication requests, which depend on the DC-North-hosted authentication service, begin timing out. 14:04 \u2014 Customer login failures begin appearing across DC-South-hosted applications; monitoring shows failure rate climbing from 0% to 40% within two minutes. 14:09 \u2014 DC-South on-call escalates to the authentication platform team, who were not initially aware of the fiber cut since their alerts are scoped to application-layer errors, not transport-layer events. 14:17 \u2014 Platform team identifies that DC-South has no local authentication fallback and begins manually redirecting authentication traffic over the (now-recovered) microwave backup link shared with DC-North's transport recovery. 14:34 \u2014 Authentication traffic successfully rerouted; login failure rate drops to under 2%. 14:41 \u2014 Failure rate confirmed at 0%; DC-South incident declared resolved. Total customer-facing impact window at DC-South: from first failure to resolution.",
+          "score": 42.73,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "requirement_id": "REQ-S01-R012",
+      "sheet_name": "Extraction",
+      "row_number": 15,
+      "section": null,
+      "requirement_text": "What was the total financial cost of this incident?",
+      "target_slots": {
+        "answer": {
+          "slot_type": "answer",
+          "header_name": "AI Answer",
+          "column_letter": "B",
+          "column_index": 2,
+          "cell_coordinate": "B15",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        },
+        "remarks": {
+          "slot_type": "remarks",
+          "header_name": "Source Section",
+          "column_letter": "C",
+          "column_index": 3,
+          "cell_coordinate": "C15",
+          "current_value": null,
+          "has_formula": false,
+          "formula": null
+        }
+      },
+      "candidate_snippets": [
+        {
+          "page_number": 1,
+          "source_type": "text",
+          "snippet": "DC-South Timeline 14:02 \u2014 Same fiber cut occurs; DC-South's authentication requests, which depend on the DC-North-hosted authentication service, begin timing out. 14:04 \u2014 Customer login failures begin appearing across DC-South-hosted applications; monitoring shows failure rate climbing from 0% to 40% within two minutes. 14:09 \u2014 DC-South on-call escalates to the authentication platform team, who were not initially aware of the fiber cut since their alerts are scoped to application-layer errors, not transport-layer events. 14:17 \u2014 Platform team identifies that DC-South has no local authentication fallback and begins manually redirecting authentication traffic over the (now-recovered) microwave backup link shared with DC-North's transport recovery. 14:34 \u2014 Authentication traffic successfully rerouted; login failure rate drops to under 2%. 14:41 \u2014 Failure rate confirmed at 0%; DC-South incident declared resolved. Total customer-facing impact window at DC-South: from first failure to resolution.",
+          "score": 50.19,
+          "table_id": null,
+          "exact_matches": []
+        },
+        {
+          "page_number": 2,
+          "source_type": "text",
+          "snippet": "The triggering event \u2014 a third-party fiber cut \u2014 was outside the organization's control and is not considered part of the root cause. The actual root cause is an architectural gap: the authentication service was designed to be deployed redundantly at both sites, per the original 2023 design document, but the DC-South deployment was deprioritized during the original rollout and never completed. This gap had not caused a visible incident before because DC-North and DC-South transport connectivity had not previously failed since the microwave backup link was commissioned two years ago. The delay between the fiber cut and traffic rerouting (14:02 to 14:34 at DC-South) was extended by the platform team's initial lack of awareness of the transport-layer event, since application monitoring and transport monitoring are currently on separate alerting systems with no cross-linking.",
+          "score": 39.49,
+          "table_id": null,
+          "exact_matches": []
+        }
+      ],
+      "deterministic_hits": [],
+      "top_page_numbers": [
+        1,
+        2
+      ]
+    }
+  ]
+}

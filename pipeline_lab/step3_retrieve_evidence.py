@@ -53,7 +53,7 @@ def run_evidence_retrieval(
     pdf_output_path: Path,
     excel_analysis_path: Path,
     output_path: Path | None = None,
-    top_k: int = 3,
+    top_k: int = 5,
     use_embeddings: bool = True,
 ) -> Step3Output:
     """Execute Step 3 Simple Hybrid evidence retrieval connecting PDF and Excel outputs."""
@@ -74,10 +74,25 @@ def run_evidence_retrieval(
         chunk_texts = [c["content"] for c in chunks]
         batch_get_local_embeddings(chunk_texts)
 
+    # 2b. Pre-embed all requirement queries in batch upfront to eliminate per-query HTTP overhead
+    sheets_raw = excel_data.get("sheets", [])
+    if use_embeddings and isinstance(sheets_raw, list):
+        all_queries: list[str] = []
+        for s in sheets_raw:
+            if isinstance(s, dict):
+                reqs = s.get("requirements", [])
+                if isinstance(reqs, list):
+                    for r in reqs:
+                        if isinstance(r, dict):
+                            s_raw = r.get("section")
+                            sec = str(s_raw).strip() if s_raw else None
+                            txt = str(r.get("requirement_text", ""))
+                            all_queries.append(f"{sec} {txt}" if sec else txt)
+        if all_queries:
+            batch_get_local_embeddings(all_queries)
+
     # 3. Match each Excel requirement against document chunks
     evidence_items: list[RequirementEvidence] = []
-    sheets_raw = excel_data.get("sheets", [])
-
     if isinstance(sheets_raw, list):
         for s in sheets_raw:
             if not isinstance(s, dict):
@@ -199,8 +214,8 @@ def main() -> None:
     parser.add_argument(
         "--top-k",
         type=int,
-        default=3,
-        help="Number of candidate snippets to retain per requirement (default: 3)",
+        default=5,
+        help="Number of candidate snippets to retain per requirement (default: 5)",
     )
     parser.add_argument(
         "--no-embeddings",

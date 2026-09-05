@@ -1,0 +1,90 @@
+[
+  {
+    "requirement_id": "REQ-S01-R001",
+    "sheet_name": "Extraction",
+    "row_number": "4",
+    "section": "",
+    "requirement_text": "How much RAM does a standard issue desktop computer have?",
+    "source_cell": "A4"
+  },
+  {
+    "requirement_id": "REQ-S01-R002",
+    "sheet_name": "Extraction",
+    "row_number": "5",
+    "section": "",
+    "requirement_text": "What is the refresh cycle for laptops?",
+    "source_cell": "A5"
+  },
+  {
+    "requirement_id": "REQ-S01-R003",
+    "sheet_name": "Extraction",
+    "row_number": "6",
+    "section": "",
+    "requirement_text": "How many monitors are issued by default to a fixed-desk employee?",
+    "source_cell": "A6"
+  },
+  {
+    "requirement_id": "REQ-S01-R004",
+    "sheet_name": "Extraction",
+    "row_number": "7",
+    "section": "",
+    "requirement_text": "What print job size requires a print-release code?",
+    "source_cell": "A7"
+  },
+  {
+    "requirement_id": "REQ-S01-R005",
+    "sheet_name": "Extraction",
+    "row_number": "8",
+    "section": "",
+    "requirement_text": "How long does guest Wi-Fi access last before expiring?",
+    "source_cell": "A8"
+  },
+  {
+    "requirement_id": "REQ-S01-R006",
+    "sheet_name": "Extraction",
+    "row_number": "9",
+    "section": "",
+    "requirement_text": "How many calls per week qualifies an employee for a noise-cancelling headset?",
+    "source_cell": "A9"
+  },
+  {
+    "requirement_id": "REQ-S01-R007",
+    "sheet_name": "Extraction",
+    "row_number": "10",
+    "section": "",
+    "requirement_text": "What time does badge access end on weekdays?",
+    "source_cell": "A10"
+  },
+  {
+    "requirement_id": "REQ-S01-R008",
+    "sheet_name": "Extraction",
+    "row_number": "11",
+    "section": "",
+    "requirement_text": "How many business days do you have to return loaner equipment?",
+    "source_cell": "A11"
+  },
+  {
+    "requirement_id": "REQ-S01-R009",
+    "sheet_name": "Extraction",
+    "row_number": "12",
+    "section": "",
+    "requirement_text": "What is the refresh cycle for a monitor according to the table?",
+    "source_cell": "A12"
+  },
+  {
+    "requirement_id": "REQ-S01-R010",
+    "sheet_name": "Extraction",
+    "row_number": "13",
+    "section": "",
+    "requirement_text": "What is the refresh cycle for an office chair, and how is it requested?",
+    "source_cell": "A13"
+  },
+  {
+    "requirement_id": "REQ-S01-R011",
+    "sheet_name": "Extraction",
+    "row_number": "14",
+    "section": "",
+    "requirement_text": "What model of smartphone is issued to new employees?",
+    "source_cell": "A14"
+  }
+]

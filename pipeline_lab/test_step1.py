@@ -15,9 +15,9 @@ try:
     from pipeline_lab.step1_extract_pdf import extract_pdf
     from pipeline_lab.validate_extraction import validate
 except ModuleNotFoundError:
-    import step1_extract_pdf
-    from step1_extract_pdf import extract_pdf
-    from validate_extraction import validate
+    import step1_extract_pdf  # type: ignore[no-redef]
+    from step1_extract_pdf import extract_pdf  # type: ignore[no-redef]
+    from validate_extraction import validate  # type: ignore[no-redef]
 
 
 @pytest.fixture

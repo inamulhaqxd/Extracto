@@ -1,0 +1,59 @@
+{
+  "document_id": "LOW_office_equipment",
+  "source_file": "C:\\Users\\Inam\\OneDrive\\Desktop\\tender\\testworkflowfile\\LOW_office_equipment.pdf",
+  "total_pages": 2,
+  "pages": [
+    {
+      "page_number": 1,
+      "text": "Office IT Equipment Reference Sheet\nA simple reference sheet describing common office IT equipment, intended for new employee\nonboarding.\nDesktop Computers\nStandard issue desktop computers run a quad-core processor with 16 GB of RAM and a 512 GB\nsolid-state drive. They come pre-installed with the company's standard office suite and are replaced on\na 4-year refresh cycle.\nLaptops\nLaptops are issued to employees who travel or work remotely more than twice a week. The standard\nlaptop model has a 14-inch display, 16 GB RAM, and a battery life of approximately 10 hours under\nnormal use.\nMonitors\nEmployees at a fixed desk are issued one 24-inch monitor by default. A second monitor can be\nrequested through the IT portal and requires manager approval.\nOffice Printers\nEach floor has one shared network printer capable of double-sided printing and stapling. Print jobs over\n50 pages require a print-release code, issued automatically by email.\nWi-Fi Access\nThe office provides two wireless networks: a main employee network requiring single sign-on, and a\nguest network that expires after 24 hours and does not require a company account.\nHeadsets\nNoise-cancelling headsets are issued to employees who take more than five calls per week on\naverage. Replacement headsets can be requested once per year without additional approval.\nBadge Access\nEmployee badges grant access to the building between 7 AM and 9 PM on weekdays. Weekend\naccess requires a separate request submitted at least 24 hours in advance.\nLoaner Equipment\nA small pool of loaner laptops and chargers is available at the front desk for employees whose\nequipment is being repaired. Loaner equipment must be returned within 5 business days.",
+      "tables": [],
+      "images": [],
+      "ocr": [],
+      "vision_analysis": []
+    },
+    {
+      "page_number": 2,
+      "text": "Equipment Refresh Schedule\nEquipment Refresh Cycle Requested Via\nDesktop Computer 4 years IT Portal\nLaptop 3 years IT Portal\nMonitor 5 years IT Portal\nHeadset As needed (max 1/year) IT Portal\nOffice Chair 5 years Facilities Request Form",
+      "tables": [
+        {
+          "table_id": "T02-01",
+          "headers": [
+            "Equipment",
+            "Refresh Cycle",
+            "Requested Via"
+          ],
+          "rows": [
+            [
+              "Desktop Computer",
+              "4 years",
+              "IT Portal"
+            ],
+            [
+              "Laptop",
+              "3 years",
+              "IT Portal"
+            ],
+            [
+              "Monitor",
+              "5 years",
+              "IT Portal"
+            ],
+            [
+              "Headset",
+              "As needed (max 1/year)",
+              "IT Portal"
+            ],
+            [
+              "Office Chair",
+              "5 years",
+              "Facilities Request Form"
+            ]
+          ]
+        }
+      ],
+      "images": [],
+      "ocr": [],
+      "vision_analysis": []
+    }
+  ]
+}

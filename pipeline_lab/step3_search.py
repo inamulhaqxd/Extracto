@@ -7,9 +7,11 @@ Strict typing only — zero Any (Rule 4). 100% offline (Rule 10).
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
+from pathlib import Path
 
 import httpx
 
@@ -21,8 +23,32 @@ except ModuleNotFoundError:
 OLLAMA_BASE_URL: str = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 DEFAULT_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 
-# In-memory vector cache for zero redundant embedding calls
-EMBEDDING_CACHE: dict[str, list[float]] = {}
+# Persistent vector cache for zero redundant embedding calls across runs
+EMBEDDING_CACHE_FILE: Path = Path("pipeline_lab/output/embeddings_cache.json")
+
+
+def _load_disk_cache() -> dict[str, list[float]]:
+    if EMBEDDING_CACHE_FILE.exists():
+        try:
+            with open(EMBEDDING_CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return {k: [float(x) for x in v] for k, v in data.items() if isinstance(v, list)}
+        except Exception:
+            pass
+    return {}
+
+
+EMBEDDING_CACHE: dict[str, list[float]] = _load_disk_cache()
+
+
+def _save_disk_cache() -> None:
+    try:
+        EMBEDDING_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(EMBEDDING_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(EMBEDDING_CACHE, f)
+    except Exception:
+        pass
 
 STOPWORDS: set[str] = {
     "a", "about", "above", "after", "again", "against", "all", "am", "an", "and",
@@ -116,7 +142,7 @@ def batch_get_local_embeddings(
                 b_indices = to_fetch_indices[b_start : b_start + batch_size]
                 res = client.post(
                     f"{OLLAMA_BASE_URL}/api/embed",
-                    json={"model": model_name, "input": b_texts},
+                    json={"model": model_name, "input": b_texts, "keep_alive": "5m"},
                 )
                 if res.status_code == 200:
                     data: dict[str, object] = res.json()
@@ -128,6 +154,7 @@ def batch_get_local_embeddings(
                                 original_text = b_texts[idx_in_batch]
                                 EMBEDDING_CACHE[original_text] = float_vec
                                 results[b_indices[idx_in_batch]] = float_vec
+        _save_disk_cache()
     except Exception:
         pass
 

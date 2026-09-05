@@ -34,7 +34,7 @@ def split_into_paragraphs(page_text: str) -> list[str]:
     for block in raw_blocks:
         # Split blocks that contain numbered sections, section titles, or header labels on single newlines
         section_splits = re.split(
-            r"(?:\n|^)(?=(?:(?:\d+\.)+\s+[A-Z]|Section\s+\d+|Article\s+\d+|[A-Z0-9_ -]{3,}:))",
+            r"(?:\n|^)(?=(?:(?:\d+\.)+\s+[A-Z]|Section\s+\d+|Article\s+\d+|[A-Z0-9_ -]{3,}:|[A-Z][A-Za-z0-9 -]+(?:Timeline|Summary|Analysis|Actions|Table|Schedule|Overview)))",
             block,
         )
         sub_blocks = [s.strip() for s in section_splits if s.strip()]

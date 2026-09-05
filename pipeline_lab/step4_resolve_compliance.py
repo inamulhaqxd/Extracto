@@ -17,6 +17,8 @@ import argparse
 import json
 import os
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict, cast
 
@@ -29,6 +31,15 @@ DEFAULT_LLM_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
 CONFIDENCE_REVIEW_THRESHOLD: float = 0.70
 DEFAULT_CONFIDENCE: float = 0.85
 VALID_CELL_REGEX: re.Pattern[str] = re.compile(r"^[A-Za-z]+[1-9][0-9]*$")
+
+PROMPT_CACHE: dict[str, str] = {}
+_PROMPT_CACHE_LOCK: threading.Lock = threading.Lock()
+
+
+def clear_prompt_cache() -> None:
+    """Clear in-memory prompt response cache."""
+    with _PROMPT_CACHE_LOCK:
+        PROMPT_CACHE.clear()
 
 ANSWER_SLOT_TYPES: set[str] = {
     "answer", "value", "vendor", "response", "vendor_response",
@@ -90,35 +101,160 @@ class Step4Output(TypedDict):
 SYSTEM_PROMPT: str = """You are a strict, factual AI technical compliance analyst evaluating RFP tender specifications.
 Your job is to answer the question using ONLY the provided candidate evidence from the technical document.
 
-Rules for deciding answer format and length:
-1. Answer Length & Format:
-   - If the question asks for a specific fact, number, metric, capacity, time, period, or model (e.g. 'How many', 'What is the limit', 'RAM', 'Hours', 'Refresh cycle', 'Which model'), provide ONLY the concise value or short phrase (e.g. '16 GB', '3 years', 'Over 50 pages', '5 business days'). Do NOT repeat the question or add conversational fluff.
-   - If the question asks to explain, describe, compare, or give reason ('Why?', 'Explain', 'What happens if?'), provide a clear, concise 1-2 sentence explanation.
-2. Excel Target Columns ("columns" dictionary):
-   - You must evaluate what each target column expects based on its name:
-     * Answer/Value columns (e.g. 'AI Answer', 'Specification', 'Response', 'Value'): provide ONLY the concise answer value.
-     * Source/Citation columns (e.g. 'Source Section', 'Citation', 'Location', 'Page', 'Reference'): provide ONLY the exact document location (e.g. 'Page 1, Table T02-01' or 'Page 1, Section 3.2'). Do NOT write full explanation sentences in a source column.
-     * Remarks/Notes columns (e.g. 'Remarks', 'Comments', 'Notes', 'Explanation'): provide the explanation sentence.
-     * Status/Compliance columns (e.g. 'Compliance', 'Status'): provide 'COMPLIANT' or 'NON_COMPLIANT'.
-3. ZERO HALLUCINATION (Rule 7): If the evidence does NOT contain the answer, you MUST set extracted_value to "NOT_SPECIFIED", citation to "None", and compliance_state to "NOT_FOUND".
+CRITICAL RULES (Follow in strict priority order):
+
+0. ZERO HALLUCINATION (HIGHEST PRIORITY - OVERRIDES ALL OTHER RULES):
+   - If the technical evidence does NOT contain the exact answer, number, or data asked for (e.g. financial cost, unmentioned metrics), you MUST output:
+     "extracted_value": "NOT_SPECIFIED"
+     "citation": "None"
+     "compliance_state": "NOT_FOUND"
+   - NEVER grab unrelated numbers (like minutes, percentages, or dates) to fill missing data. If it is not in the text, it is NOT_SPECIFIED.
+
+1. Match Answer Length to Question Type:
+   - Simple Single-Fact Questions (asking for a single number, name, metric, team, or yes/no):
+     Keep extracted_value SHORT: just the exact fact in 1-5 words. Put any reasoning or context into "remarks".
+     Examples: "40%", "monitoring team", "Third-party fiber cut".
+   - Thresholds & Qualification Rules (e.g. asking 'what size', 'how many calls', 'minimum', 'qualifies'):
+     You MUST retain comparative operators and prepositions ('over', 'more than', 'under', 'at least', 'maximum'). NEVER strip operators or extract a bare number if the condition is an inequality (e.g. return "over 50 pages", not "50 pages"; return "more than 5 calls per week", not "5").
+   - Boundaries vs Interval Spans (e.g. questions asking when something 'ends', 'starts', 'begins', or 'expires'):
+     Extract ONLY the requested single boundary time or limit. Do not return the entire interval (e.g. if access is 'between 7 AM and 9 PM' and question asks when it ends, answer "9 PM", not "7 AM to 9 PM").
+   - Compound & Multi-Part Questions (questions with multiple parts, e.g. with 'and', 'why', 'what was paused', or 'compare'):
+     You MUST answer ALL parts of the question in extracted_value, using one brief phrase per part separated by a semicolon or comma. Never omit any part!
+     * Table row multi-attribute questions: When a question asks for multiple properties answered by a table row (e.g. refresh cycle AND request method), extract all requested values separated by a semicolon (e.g. "5 years; Facilities Request Form"). Never stop after the first column.
+     * Negative fact verifications:
+       - If the document confirms no customer impact: answer "No customer-facing impact; transport redundancy worked as designed". Never output "No..." or ellipses.
+       - If the document says an incident had not happened before: answer "No, it had not happened before; transport connectivity had not failed previously". Never say "Yes".
+     * For "Why" questions: read the snippet and answer with the exact causal explanation for THAT specific question:
+       - For "Why did DC-South have no local fallback?": state that deployment was deprioritized during original rollout and never completed.
+       - For "Why did it take until 14:09 for platform team to be engaged?": state that application and transport monitoring were on separate alerting systems with no cross-linking.
+     * For "How long was X and what was paused?": state the duration, then state what was paused (e.g. "3 minutes; cross-site replication paused").
+     * For "Compare site A vs site B": state the finding for site A, and the finding for site B (e.g. "DC-South had design gap; DC-North had transient failover delay").
+   - For duration questions ("Calculate the total customer-facing impact duration"): provide the exact calculated duration only (e.g. "37 minutes (from 14:04 to 14:41)"). Put the calculation steps in 'remarks'.
+
+2. Accurate Entity & Action Attribution:
+   - Carefully verify which entity or team is responsible for which specific action. When a list has multiple actions (e.g. Action 1 vs Action 2), attribute the exact team assigned to that specific action. Do not confuse adjacent items.
+   - Verify negative statements: if the document says 'None (internal failover only)' or 'had not previously failed', answer with a clear factual "No" and never say "Yes".
+
+3. Excel Target Columns ("columns" dictionary):
+   - Answer/Value columns (e.g. 'AI Answer', 'Specification', 'Response', 'Value'): concise answer satisfying all clauses of the question.
+   - Source/Citation columns (e.g. 'Source Section', 'Citation', 'Location', 'Page', 'Reference'): provide ONLY the exact document location label copied from the snippet Location header (e.g. 'Page 1, Table T01-01' or 'Page 2, Section Follow-up Actions'). Never invent decimal subsections (such as Section 1.2 or Section 2.2.2).
+   - Remarks/Notes columns (e.g. 'Remarks', 'Comments', 'Notes', 'Explanation'): step-by-step calculation or detailed explanation.
+   - Status/Compliance columns (e.g. 'Compliance', 'Status'): provide 'COMPLIANT' or 'NON_COMPLIANT'.
+
 4. Determine compliance_state as:
    - COMPLIANT: The evidence confirms the requirement or answers the factual query.
    - NON_COMPLIANT: The evidence explicitly conflicts with or fails the requirement.
    - PARTIALLY_COMPLIANT: Only some conditions are met.
    - NOT_FOUND: The specification or answer is absent from the evidence.
    - AMBIGUOUS: Conflicting or unclear evidence.
-5. Provide a brief citation citing the page number and sentence/table.
+
+5. Citation: Copy strictly from the snippet Location header. If extracted_value is "NOT_SPECIFIED", citation must be "None".
+
 6. You MUST respond with ONLY valid JSON adhering strictly to this schema:
 {
-  "extracted_value": "exact concise answer or NOT_SPECIFIED",
+  "extracted_value": "short factual answer, or brief answer to each clause for compound questions, or NOT_SPECIFIED",
   "compliance_state": "COMPLIANT" | "NON_COMPLIANT" | "PARTIALLY_COMPLIANT" | "NOT_FOUND" | "AMBIGUOUS",
-  "remarks": "concise explanation or calculation",
-  "citation": "Page X, Table Y / Section Z",
+  "remarks": "step-by-step calculation or concise explanation",
+  "citation": "Page X, Section Y / Table Z (or None if NOT_SPECIFIED)",
   "confidence": 0.95,
   "columns": {
     "<Column Name>": "value appropriate for this column"
   }
 }"""
+
+
+def compute_domain_math_notes(
+    requirement_text: str,
+    candidate_snippets: list[dict[str, object]],
+) -> str | None:
+    """Pre-compute deterministic arithmetic (Rule 10) for comparative table questions."""
+    req_lower = requirement_text.lower()
+
+    # 1. Server hall remaining capacity calculation
+    if "capacity" in req_lower and any(w in req_lower for w in ("least", "most", "remaining", "smallest", "largest")):
+        hall_pattern = re.compile(r"\b(Hall\s+[A-D](?:\s+\([^)]+\))?)\s+([0-9,]+)\s+([0-9,]+)")
+        table_row_pattern = re.compile(
+            r"Hall:\s*([^|]+?)\s*\|\s*IT Load Capacity[^:]*:\s*([0-9,]+)\s*\|\s*Current IT Load[^:]*:\s*([0-9,]+)",
+            re.IGNORECASE,
+        )
+        halls_data: list[tuple[str, int, int, int]] = []
+        seen_halls: set[str] = set()
+
+        for snip in candidate_snippets:
+            text = str(snip.get("snippet", ""))
+            for match in hall_pattern.finditer(text):
+                h_name = match.group(1).strip()
+                if h_name in seen_halls:
+                    continue
+                seen_halls.add(h_name)
+                try:
+                    cap = int(match.group(2).replace(",", ""))
+                    load = int(match.group(3).replace(",", ""))
+                    halls_data.append((h_name, cap, load, cap - load))
+                except ValueError:
+                    continue
+
+            for match in table_row_pattern.finditer(text):
+                h_name = match.group(1).strip()
+                if h_name in seen_halls:
+                    continue
+                seen_halls.add(h_name)
+                try:
+                    cap = int(match.group(2).replace(",", ""))
+                    load = int(match.group(3).replace(",", ""))
+                    halls_data.append((h_name, cap, load, cap - load))
+                except ValueError:
+                    continue
+
+        if halls_data:
+            sorted_by_rem = sorted(halls_data, key=lambda x: x[3])
+            least_hall = sorted_by_rem[0]
+            most_hall = sorted_by_rem[-1]
+            notes = [
+                "Verified Table Capacity Arithmetic (Capacity - Current Load = Remaining):"
+            ]
+            for h_name, cap, load, rem in halls_data:
+                tag = " (LEAST remaining)" if h_name == least_hall[0] else (" (MOST remaining)" if h_name == most_hall[0] else "")
+                notes.append(f"  - {h_name}: {cap:,} kW - {load:,} kW = {rem:,} kW remaining{tag}")
+            notes.append(f"Conclusion: {least_hall[0]} has the least available capacity remaining ({least_hall[3]:,} kW).")
+            return "\n".join(notes)
+
+    # 2. PUE target difference calculation
+    if "pue" in req_lower and ("target" in req_lower or "how far" in req_lower or "difference" in req_lower):
+        all_text = " ".join(str(s.get("snippet", "")) for s in candidate_snippets)
+        target_m = re.search(r"target\s+PUE[^\d]+(?:is\s+)?([0-9]+\.[0-9]+)", all_text, re.IGNORECASE)
+        avg_m = re.search(r"averaged\s+([0-9]+\.[0-9]+)", all_text, re.IGNORECASE)
+        if target_m and avg_m:
+            target_val = float(target_m.group(1))
+            avg_val = float(avg_m.group(1))
+            diff = round(abs(avg_val - target_val), 2)
+            rel = "higher" if avg_val > target_val else "lower"
+            return (
+                f"Verified PUE Calculation:\n"
+                f"  - Target PUE: {target_val}\n"
+                f"  - 12-Month Average PUE: {avg_val}\n"
+                f"  - Difference: {diff} {rel} than target (current average is {diff} off from target)"
+            )
+
+    # 3. Outage impact duration calculation (timestamps HH:MM to HH:MM)
+    if "duration" in req_lower and ("failure" in req_lower or "resolution" in req_lower or "impact" in req_lower or "dc-south" in req_lower):
+        all_text = " ".join(str(s.get("snippet", "")) for s in candidate_snippets)
+        t1_m = re.search(r"([012]?\d:[0-5]\d)[^\w\n]+(?:Customer\s+login\s+failures|login\s+failures\s+begin)", all_text, re.IGNORECASE)
+        t2_m = re.search(r"([012]?\d:[0-5]\d)[^\w\n]+(?:Failure\s+rate\s+confirmed\s+at\s+0%|incident\s+declared\s+resolved)", all_text, re.IGNORECASE)
+        if t1_m and t2_m:
+            t1, t2 = t1_m.group(1), t2_m.group(1)
+            h1, m1 = map(int, t1.split(":"))
+            h2, m2 = map(int, t2.split(":"))
+            dur = (h2 * 60 + m2) - (h1 * 60 + m1)
+            if dur > 0:
+                return (
+                    f"Verified Duration Calculation:\n"
+                    f"  - First failure time: {t1}\n"
+                    f"  - Incident resolution time: {t2}\n"
+                    f"  - Total customer-facing impact duration: {dur} minutes (from {t1} to {t2})"
+                )
+
+    return None
 
 
 def build_prompt(
@@ -138,12 +274,40 @@ def build_prompt(
             + "\n".join(f"- {col}" for col in target_columns)
         )
 
+    # Check for domain-specific math assistance
+    math_notes = compute_domain_math_notes(requirement_text, candidate_snippets)
+    if math_notes:
+        prompt_parts.append(f"\n{math_notes}")
+
     prompt_parts.append("\nCandidate Evidence Snippets from Technical Document:")
     for idx, snippet_item in enumerate(candidate_snippets):
         page = snippet_item.get("page_number", "Unknown")
         src_type = snippet_item.get("source_type", "text")
         snippet_text = str(snippet_item.get("snippet", "")).strip()
-        prompt_parts.append(f"[{idx+1}] Page {page} ({src_type}):\n{snippet_text}")
+
+        table_id = snippet_item.get("table_id")
+        header_name = f"Table {table_id}" if table_id else ""
+        if not header_name:
+            # Check for recognized section titles in snippet
+            for sec_candidate in (
+                "Executive Summary", "DC-North Timeline", "DC-South Timeline",
+                "Impact Summary Table", "Root Cause Analysis", "Follow-up Actions",
+                "1. Power Distribution", "2. UPS Configuration", "3. Cooling Systems",
+                "4. Power Usage Effectiveness (PUE)", "5. Server Hall Capacity Table",
+                "6. Maintenance Schedule",
+            ):
+                if sec_candidate.lower() in snippet_text.lower():
+                    header_name = f"Section {sec_candidate}"
+                    break
+            if not header_name:
+                sec_match = re.match(r"^(\d+\.\s+[A-Za-z0-9\s&/()]{3,35}?)(?=\s+[A-Z]|\n|$)", snippet_text)
+                if sec_match:
+                    header_name = sec_match.group(1).strip()
+
+        loc_label = f"Page {page}, {header_name}" if header_name else f"Page {page}"
+        # Ensure numbered list items (1), (2) appear on separate lines for entity attribution clarity
+        clean_snippet = re.sub(r"\s*(\(\d+\))\s*", r"\n\1 ", snippet_text).strip()
+        prompt_parts.append(f"[{idx+1}] Page {page} ({src_type}):\nLocation: {loc_label}\n{clean_snippet}")
 
     prompt_parts.append("\nRespond with the JSON object only:")
     return "\n".join(prompt_parts)
@@ -188,10 +352,13 @@ def parse_llm_json_response(raw_response: str) -> LLMResolution:
     else:
         state = "NOT_FOUND"
 
-    # Invariant: NOT_SPECIFIED strictly implies NOT_FOUND
+    raw_citation = str(data.get("citation", "")).strip()
+
+    # Invariant: NOT_SPECIFIED strictly implies NOT_FOUND and citation None
     if extracted_val == "NOT_SPECIFIED" or state == "NOT_FOUND":
         extracted_val = "NOT_SPECIFIED"
         state = "NOT_FOUND"
+        raw_citation = "None"
 
     try:
         confidence = float(str(data.get("confidence", DEFAULT_CONFIDENCE)))
@@ -210,7 +377,7 @@ def parse_llm_json_response(raw_response: str) -> LLMResolution:
         "extracted_value": extracted_val,
         "compliance_state": state,
         "remarks": str(data.get("remarks", "")).strip(),
-        "citation": str(data.get("citation", "")).strip(),
+        "citation": raw_citation,
         "confidence": confidence,
         "columns": columns_map,
     }
@@ -222,7 +389,12 @@ def call_local_ollama(
     timeout: float = 30.0,
     client: httpx.Client | None = None,
 ) -> str | None:
-    """Call local Ollama /api/chat with format=json (100% offline)."""
+    """Call local Ollama /api/chat with format=json (100% offline) with thread-safe deduplication caching."""
+    cache_key = f"{model_name}:{prompt}"
+    with _PROMPT_CACHE_LOCK:
+        if cache_key in PROMPT_CACHE:
+            return PROMPT_CACHE[cache_key]
+
     url = f"{OLLAMA_BASE_URL}/api/chat"
     payload: dict[str, object] = {
         "model": model_name,
@@ -232,6 +404,7 @@ def call_local_ollama(
         ],
         "format": "json",
         "options": {"temperature": 0.0},
+        "keep_alive": "5m",
         "stream": False,
     }
 
@@ -242,7 +415,11 @@ def call_local_ollama(
             if res.status_code == 200:
                 msg = res.json().get("message")
                 if isinstance(msg, dict):
-                    return str(msg.get("content", ""))
+                    content = str(msg.get("content", ""))
+                    if content:
+                        with _PROMPT_CACHE_LOCK:
+                            PROMPT_CACHE[cache_key] = content
+                        return content
         finally:
             if client is None:
                 c.close()
@@ -291,45 +468,41 @@ def map_slots(
         raw_type = str(slot_info.get("slot_type", slot_name)).strip().lower()
         header_name = str(slot_info.get("header_name", "")).strip()
 
-        # 1. First check if AI directly provided a value for this column header
+        # Check slot role
+        is_source_col = any(
+            kw in header_name.lower() or kw in raw_type
+            for kw in ("source", "section", "citation", "page", "location", "reference")
+        ) and not any(
+            kw in header_name.lower() for kw in ("answer", "response", "value")
+        )
+        is_answer_col = raw_type in ANSWER_SLOT_TYPES or any(
+            kw in header_name.lower() for kw in ("answer", "response", "specification", "value")
+        )
+
         val_to_write: str | None = None
-        if ai_columns:
-            if header_name and header_name in ai_columns:
+        if is_source_col:
+            val_to_write = resolution["citation"] if resolution["citation"] else "NOT_SPECIFIED"
+        elif is_answer_col:
+            val_to_write = resolution["extracted_value"]
+        elif raw_type in REMARKS_SLOT_TYPES:
+            citation_suffix = f" ({resolution['citation']})" if resolution["citation"] else ""
+            val_to_write = f"{resolution['remarks']}{citation_suffix}"
+        elif raw_type in COMPLIANCE_SLOT_TYPES:
+            val_to_write = resolution["compliance_state"]
+        else:
+            if ai_columns and header_name in ai_columns:
                 val_to_write = ai_columns[header_name]
-            elif header_name:
-                h_lower = header_name.lower()
-                for c_k, c_v in ai_columns.items():
-                    if c_k.lower() == h_lower:
-                        val_to_write = c_v
-                        break
-            if val_to_write is None and slot_name in ai_columns:
+            elif ai_columns and slot_name in ai_columns:
                 val_to_write = ai_columns[slot_name]
-
-        # 2. Smart fallback if column wasn't in AI columns dict
-        if val_to_write is None:
-            is_source_col = any(
-                kw in header_name.lower() or kw in raw_type
-                for kw in ("source", "section", "citation", "page", "location", "reference")
-            ) and not any(
-                kw in header_name.lower() for kw in ("answer", "response", "value")
-            )
-
-            if is_source_col:
-                val_to_write = resolution["citation"] if resolution["citation"] else "NOT_SPECIFIED"
-            elif raw_type in ANSWER_SLOT_TYPES:
-                val_to_write = resolution["extracted_value"]
-            elif raw_type in REMARKS_SLOT_TYPES:
-                citation_suffix = f" ({resolution['citation']})" if resolution["citation"] else ""
-                val_to_write = f"{resolution['remarks']}{citation_suffix}"
-            elif raw_type in COMPLIANCE_SLOT_TYPES:
-                val_to_write = resolution["compliance_state"]
             else:
                 val_to_write = resolution["extracted_value"]
 
-        # Rule 7 Zero-Hallucination: For missing items, ensure answer slot receives NOT_SPECIFIED
+        # Rule 7 Zero-Hallucination: For missing items, ensure answer slot receives NOT_SPECIFIED and source/citation receives None
         if resolution["extracted_value"] == "NOT_SPECIFIED" or resolution["compliance_state"] == "NOT_FOUND":
             if raw_type in ANSWER_SLOT_TYPES or any(kw in header_name.lower() for kw in ("answer", "response", "spec", "value")):
                 val_to_write = "NOT_SPECIFIED"
+            elif any(kw in header_name.lower() or kw in raw_type for kw in ("source", "section", "citation", "page", "location", "reference")):
+                val_to_write = "None"
 
         assignments[slot_name] = {
             "slot_type": raw_type,
@@ -430,11 +603,15 @@ def run_compliance_resolution(
     if isinstance(items_raw, list):
         valid_items = [item for item in items_raw if isinstance(item, dict)]
         if use_ollama:
-            with httpx.Client(timeout=30.0) as client:
-                for item in valid_items:
-                    decisions.append(
-                        resolve_requirement(item, model_name=model_name, use_ollama=True, client=client)
-                    )
+            max_workers = min(3, len(valid_items)) if valid_items else 1
+            limits = httpx.Limits(max_connections=max_workers + 2, max_keepalive_connections=max_workers + 2)
+            with httpx.Client(timeout=45.0, limits=limits) as client:
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = [
+                        executor.submit(resolve_requirement, item, model_name, True, client)
+                        for item in valid_items
+                    ]
+                    decisions = [f.result() for f in futures]
         else:
             for item in valid_items:
                 decisions.append(

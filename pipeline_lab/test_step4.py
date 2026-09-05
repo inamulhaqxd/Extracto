@@ -19,8 +19,12 @@ import json
 from pathlib import Path
 
 from pipeline_lab.step4_resolve_compliance import (
+    DEFAULT_LLM_MODEL,
+    PROMPT_CACHE,
     LLMResolution,
     build_prompt,
+    call_local_ollama,
+    clear_prompt_cache,
     map_slots,
     offline_deterministic_fallback,
     parse_llm_json_response,
@@ -391,4 +395,24 @@ def test_map_slots_with_ai_columns_and_clean_source_citation() -> None:
     assignments_b = map_slots(target_slots, resolution_b, needs_review=False)
     assert assignments_b["answer"]["value"] == "16 GB"
     assert assignments_b["source"]["value"] == "Page 1, Table T02-01"
+
+
+def test_prompt_caching_deduplication() -> None:
+    """Verify that duplicate prompts are served directly from PROMPT_CACHE without redundant calls."""
+    clear_prompt_cache()
+    prompt = "Test prompt for duplication verification"
+    cached_content = '{"extracted_value": "100 TB", "compliance_state": "COMPLIANT", "remarks": "Cached", "citation": "Page 1"}'
+
+    cache_key = f"{DEFAULT_LLM_MODEL}:{prompt}"
+    PROMPT_CACHE[cache_key] = cached_content
+
+    # Should hit cache immediately and return cached JSON without needing network/Ollama
+    result = call_local_ollama(prompt, model_name=DEFAULT_LLM_MODEL)
+    assert result == cached_content
+
+    parsed = parse_llm_json_response(result)
+    assert parsed["extracted_value"] == "100 TB"
+    assert parsed["compliance_state"] == "COMPLIANT"
+    clear_prompt_cache()
+
 
