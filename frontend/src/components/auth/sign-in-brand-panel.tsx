@@ -25,13 +25,8 @@ export function SignInBrandPanel() {
           <span className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-md transition-transform group-hover:scale-105">
             <FileText className="size-4.5" />
           </span>
-          <span className="flex flex-col leading-tight">
-            <span className="text-[15px] font-semibold tracking-tight">
-              Extracto AI
-            </span>
-            <span className="text-muted-foreground text-xs tracking-tight">
-              Spec Intelligence
-            </span>
+          <span className="text-[15px] font-semibold tracking-tight">
+            Extracto AI
           </span>
         </Link>
 

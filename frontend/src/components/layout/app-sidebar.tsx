@@ -29,9 +29,8 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-primary text-primary-foreground group-data-[collapsible=icon]:size-full">
             <FileText className="size-4 group-data-[collapsible=icon]:size-5" />
           </span>
-          <span className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-semibold tracking-tight">Extracto AI</span>
-            <span className="text-xs text-muted-foreground">Spec Intelligence</span>
+          <span className="text-sm font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
+            Extracto AI
           </span>
         </Link>
       </SidebarHeader>
