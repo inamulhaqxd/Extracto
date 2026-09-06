@@ -1,4 +1,4 @@
-.PHONY: help install dev test test-cov lint lint-fix typecheck check run run-all run-api run-frontend run-streamlit run-ui stop seed docker-up docker-down docker-logs migrate migrate-new clean
+.PHONY: help install dev test test-cov lint lint-fix typecheck check run run-all run-api run-frontend run-ui stop seed docker-up docker-down docker-logs migrate migrate-new clean
 
 help:
 	@echo Available commands:

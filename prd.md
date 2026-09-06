@@ -159,9 +159,7 @@ FastAPI
 
 ### Frontend
 
-Start with Streamlit.
-
-Keep frontend logic separate from backend logic so it can later be replaced with React.
+Next.js frontend with Tailwind CSS and shadcn/ui components.
 
 ### PDF
 
@@ -299,7 +297,7 @@ ai_rfp_excel/
 │   └── config.py
 │
 ├── frontend/
-│   └── streamlit_app.py
+│   └── (Next.js Application)
 │
 ├── tests/
 │
@@ -1370,7 +1368,7 @@ Keep API logic separate from business logic.
 
 # 39. Frontend
 
-Create a simple Streamlit interface:
+Next.js web interface:
 
 ```text
 AI RFP Excel Generator
