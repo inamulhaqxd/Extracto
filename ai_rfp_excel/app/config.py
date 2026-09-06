@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     OLLAMA_TEXT_MODEL: str = "qwen2.5:3b"
     OLLAMA_VISION_MODEL: str = "llava"
     OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
-    DEFAULT_LLM_MODEL: str = "qwen3:4b"
+    DEFAULT_LLM_MODEL: str = "qwen2.5:3b"
     LLM_TEMPERATURE: float = 0.1
     LLM_TIMEOUT_SECONDS: int = 120
     OLLAMA_KEEP_ALIVE: str = "5m"
@@ -49,6 +49,11 @@ class Settings(BaseSettings):
 
     SECRET_KEY: str = "change-me-in-production"
     ALLOWED_EXTENSIONS: str = ".pdf,.xlsx,.xls"
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    @property
+    def CORS_ORIGINS_LIST(self) -> list[str]:
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
     @property
     def ALLOWED_EXTENSIONS_LIST(self) -> list[str]:

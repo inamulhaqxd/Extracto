@@ -4,6 +4,20 @@
 
 AI-based RFP PDF-to-Excel automation system. Local, private, modular.
 
+## Strict User Rules & Constraints
+
+1. **NO AI Vision Models**: NEVER use or load AI vision models for extraction. Use **OCR only**.
+2. **User's Own Pipeline & Local Model**: The user is implementing their own pipeline and local model. Do not interfere with or modify their local model/pipeline.
+3. **No Unprompted File Access**: Do NOT read, create, or write any files unless explicitly instructed and commanded by the user in their request.
+4. **Never Use `Any`**: ALWAYS use proper, strict type annotations (`TypedDict`, `dataclass`, Pydantic models, or precise Python types). Never use `Any`.
+5. **Clean & Modular Code (No Long Files)**: Keep files short, clean, and focused on a single responsibility. Never create large monolithic files.
+6. **Proper Architecture**: Always maintain a clean, modular architecture with decoupled phases and clear boundaries.
+7. **Zero Hallucination for Missing Requirements**: If a specification or value is not explicitly present in the source document, output `NOT_SPECIFIED` and flag the cell for yellow highlighting. Never guess or invent data.
+8. **Inspectable JSON Artifacts Between Phases**: Every phase must save its output as a validated, human-readable JSON artifact before the next phase consumes it.
+9. **In-Place Excel Style Preservation**: Always load the original Excel file via `openpyxl` and update cells in-place. Never recreate workbooks from scratch or strip existing formatting/formulas.
+10. **100% Offline & Local Execution**: Zero external cloud API calls. Everything must run strictly on local infrastructure (local Ollama, local OCR, local files).
+11. **Automated Unit Tests Per Phase**: Every pipeline phase must have its own standalone unit test suite with passing assertions before progressing to subsequent steps.
+
 ## Architecture
 
 Pipeline pattern. Each phase is an independent module with defined inputs/outputs.

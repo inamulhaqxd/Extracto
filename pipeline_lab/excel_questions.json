@@ -1,0 +1,98 @@
+[
+  {
+    "requirement_id": "REQ-S01-R001",
+    "sheet_name": "Extraction",
+    "row_number": "4",
+    "section": "",
+    "requirement_text": "How many utility power feeds enter the facility, and what redundancy level does this provide?",
+    "source_cell": "A4"
+  },
+  {
+    "requirement_id": "REQ-S01-R002",
+    "sheet_name": "Extraction",
+    "row_number": "5",
+    "section": "",
+    "requirement_text": "What is the power rating of each diesel generator?",
+    "source_cell": "A5"
+  },
+  {
+    "requirement_id": "REQ-S01-R003",
+    "sheet_name": "Extraction",
+    "row_number": "6",
+    "section": "",
+    "requirement_text": "What UPS topology is used per server hall, and what does that mean?",
+    "source_cell": "A6"
+  },
+  {
+    "requirement_id": "REQ-S01-R004",
+    "sheet_name": "Extraction",
+    "row_number": "7",
+    "section": "",
+    "requirement_text": "What is the battery runtime at full load, and how does it compare to the generator startup time?",
+    "source_cell": "A7"
+  },
+  {
+    "requirement_id": "REQ-S01-R005",
+    "sheet_name": "Extraction",
+    "row_number": "8",
+    "section": "",
+    "requirement_text": "What supply air temperature is maintained by the cooling system?",
+    "source_cell": "A8"
+  },
+  {
+    "requirement_id": "REQ-S01-R006",
+    "sheet_name": "Extraction",
+    "row_number": "9",
+    "section": "",
+    "requirement_text": "How is PUE calculated, and what was the facility's average PUE over the last 12 months?",
+    "source_cell": "A9"
+  },
+  {
+    "requirement_id": "REQ-S01-R007",
+    "sheet_name": "Extraction",
+    "row_number": "10",
+    "section": "",
+    "requirement_text": "What is the facility's target PUE, and how far off is the current average from that target?",
+    "source_cell": "A10"
+  },
+  {
+    "requirement_id": "REQ-S01-R008",
+    "sheet_name": "Extraction",
+    "row_number": "11",
+    "section": "",
+    "requirement_text": "Which server hall currently has the least available IT load capacity remaining?",
+    "source_cell": "A11"
+  },
+  {
+    "requirement_id": "REQ-S01-R009",
+    "sheet_name": "Extraction",
+    "row_number": "12",
+    "section": "",
+    "requirement_text": "How many racks does Hall D have, and what cooling method does it use?",
+    "source_cell": "A12"
+  },
+  {
+    "requirement_id": "REQ-S01-R010",
+    "sheet_name": "Extraction",
+    "row_number": "13",
+    "section": "",
+    "requirement_text": "How often is chiller maintenance performed, and when is the next one scheduled?",
+    "source_cell": "A13"
+  },
+  {
+    "requirement_id": "REQ-S01-R011",
+    "sheet_name": "Extraction",
+    "row_number": "14",
+    "section": "",
+    "requirement_text": "Why does Hall D follow a different inspection schedule than the other halls?",
+    "source_cell": "A14"
+  },
+  {
+    "requirement_id": "REQ-S01-R012",
+    "sheet_name": "Extraction",
+    "row_number": "15",
+    "section": "",
+    "requirement_text": "What is the average annual cost of the facility's cooling system?",
+    "source_cell": "A15"
+  }
+]

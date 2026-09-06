@@ -1,0 +1,64 @@
+{
+  "document_id": "MEDIUM_datacenter_power_cooling",
+  "source_file": "C:\\Users\\Inam\\OneDrive\\Desktop\\tender\\pipeline_lab\\input\\MEDIUM_datacenter_power_cooling.pdf",
+  "total_pages": 2,
+  "pages": [
+    {
+      "page_number": 1,
+      "text": "Datacenter Power & Cooling Systems Overview\nReference document describing the power distribution and cooling infrastructure across the facility's\nserver halls.\n1. Power Distribution\nUtility power enters the facility through two independent feeds from separate substations, providing N+1\nredundancy at the facility level. Each feed is rated for 2.5 MW. Power passes through automatic\ntransfer switches (ATS) before reaching the uninterruptible power supply (UPS) systems, which provide\nride-through power during the transfer window and during the startup of backup generators. Three\ndiesel generators, each rated at 1.2 MW, provide backup power and can sustain full facility load with\none generator offline for maintenance (N+1 generator redundancy).\n2. UPS Configuration\nUPS units are configured in a 2N topology per server hall, meaning each hall has two fully independent\nUPS paths, either of which can carry the full hall load alone. Battery runtime at full load is rated at 12\nminutes, sufficient to bridge the approximately 45-second generator startup and transfer window with\nsignificant margin.\n3. Cooling Systems\nCooling is provided by a chilled water system feeding in-row cooling units positioned between server\nracks. Chilled water is produced by three chillers operating in an N+1 configuration, each rated at 400\ntons of cooling capacity. Server halls are arranged in a hot-aisle/cold-aisle containment layout, which\nimproves cooling efficiency by preventing hot and cold air from mixing. Supply air temperature is\nmaintained at 22°C (72°F) with a target humidity range of 40-60% relative humidity.\n4. Power Usage Effectiveness (PUE)\nPUE is calculated as Total Facility Power divided by IT Equipment Power. The facility's measured PUE\nover the past 12 months averaged 1.35, meaning for every 1 kW consumed by IT equipment, an\nadditional 0.35 kW is consumed by cooling, power distribution losses, and other overhead. The facility's\ntarget PUE, set as part of the annual efficiency goal, is 1.25.\n5. Server Hall Capacity Table\nHall IT Load Capacity (kW) Current IT Load (kW) Rack Count Cooling Type\nHall A 1,800 1,240 60 In-row chilled water\nHall B 1,800 1,610 60 In-row chilled water\nHall C 1,200 540 40 In-row chilled water\nHall D (new) 2,000 180 65 In-row chilled water + rear-door heat exchangers\n6. Maintenance Schedule",
+      "tables": [
+        {
+          "table_id": "T01-01",
+          "headers": [
+            "Hall",
+            "IT Load Capacity (kW)",
+            "Current IT Load (kW)",
+            "Rack Count",
+            "Cooling Type"
+          ],
+          "rows": [
+            [
+              "Hall A",
+              "1,800",
+              "1,240",
+              "60",
+              "In-row chilled water"
+            ],
+            [
+              "Hall B",
+              "1,800",
+              "1,610",
+              "60",
+              "In-row chilled water"
+            ],
+            [
+              "Hall C",
+              "1,200",
+              "540",
+              "40",
+              "In-row chilled water"
+            ],
+            [
+              "Hall D (new)",
+              "2,000",
+              "180",
+              "65",
+              "In-row chilled water + rear-door heat exchangers"
+            ]
+          ]
+        }
+      ],
+      "images": [],
+      "ocr": [],
+      "vision_analysis": []
+    },
+    {
+      "page_number": 2,
+      "text": "Generators are load-tested monthly for 30 minutes under simulated facility load. UPS battery health is\nchecked quarterly, with full battery replacement typically required every 5 years. Chiller maintenance\nfollows the manufacturer's schedule of semi-annual service, with the next scheduled service for all\nthree chillers falling in the third week of next month. Hall D's cooling system, being newly\ncommissioned, follows a more frequent monthly inspection schedule for its first year of operation.",
+      "tables": [],
+      "images": [],
+      "ocr": [],
+      "vision_analysis": []
+    }
+  ]
+}

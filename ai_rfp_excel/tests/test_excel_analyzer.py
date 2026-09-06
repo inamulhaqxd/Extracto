@@ -3,7 +3,6 @@ from pathlib import Path
 
 import openpyxl
 from openpyxl.styles import Font
-import pytest
 
 from ai_rfp_excel.app.excel.analyzer import ExcelAnalyzer
 from ai_rfp_excel.app.excel.models import ColumnType

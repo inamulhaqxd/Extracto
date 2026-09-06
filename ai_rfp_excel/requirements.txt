@@ -31,7 +31,7 @@ python-jose[cryptography]==3.3.0
 structlog==24.4.0
 
 # PDF processing
-pymupdf==1.24.10
+pymupdf==1.28.2
 pdfplumber==0.11.4
 camelot-py==0.11.0
 Pillow==10.4.0

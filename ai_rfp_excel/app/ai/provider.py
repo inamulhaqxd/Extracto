@@ -27,11 +27,23 @@ T = TypeVar("T", bound=BaseModel)
 
 
 def extract_json_content(text: str) -> str:
-    """Extract clean JSON string from text or markdown code fences."""
+    """Extract clean JSON string from text or markdown code fences with automatic closure repair."""
     cleaned = text.strip()
     match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
     if match:
-        return match.group(1).strip()
+        cleaned = match.group(1).strip()
+
+    first_brace = cleaned.find("{")
+    if first_brace != -1:
+        cleaned = cleaned[first_brace:]
+
+    # Auto-repair unclosed JSON due to token limits
+    if cleaned.startswith("{") and not cleaned.endswith("}"):
+        quote_count = cleaned.count('"') - cleaned.count(r'\"')
+        if quote_count % 2 != 0:
+            cleaned += '"'
+        cleaned += "\n}"
+
     return cleaned
 
 
@@ -127,7 +139,9 @@ class LocalLLMProvider(LLMInterface):
             "stream": False,
             "options": {
                 "temperature": temperature,
-                "num_parallel": settings.OLLAMA_NUM_PARALLEL,
+                "num_parallel": 2,
+                "num_predict": 350,
+                "num_ctx": 2048,
             },
             "keep_alive": settings.OLLAMA_KEEP_ALIVE,
         }

@@ -1,11 +1,36 @@
 from pathlib import Path
-import fitz  # PyMuPDF
+
+try:
+    import fitz
+except Exception:
+    fitz = None
+
 import openpyxl
-from openpyxl.styles import Border, Font, PatternFill, Side
 import pytest
+from openpyxl.styles import Font, PatternFill
 
 from ai_rfp_excel.app.ai.mock_provider import MockLLMProvider
 from ai_rfp_excel.app.matching.models import FactItem
+
+
+def _create_minimal_pdf(path: Path, text_lines: list[str]) -> Path:
+    """Generate a clean, valid PDF file without requiring fitz/C++ dependencies."""
+    escaped = " ".join(text_lines).replace("(", "[").replace(")", "]")
+    stream = f"BT /F1 12 Tf 50 700 Td ({escaped}) Tj ET"
+    stream_bytes = stream.encode("latin-1")
+    pdf_content = (
+        b"%PDF-1.4\n"
+        b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+        b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n"
+        b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n"
+        b"4 0 obj << /Length " + str(len(stream_bytes)).encode("latin-1") + b" >> stream\n" +
+        stream_bytes + b"\nendstream endobj\n"
+        b"5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n"
+        b"xref\n0 6\n0000000000 65535 f \n"
+        b"trailer << /Size 6 /Root 1 0 R >>\nstartxref\n300\n%%EOF\n"
+    )
+    path.write_bytes(pdf_content)
+    return path
 
 
 @pytest.fixture
@@ -57,42 +82,50 @@ def sample_facts_corpus() -> list[FactItem]:
 @pytest.fixture
 def sample_pdf_text_only(tmp_path: Path) -> Path:
     """Create a text-only PDF datasheet."""
-    doc = fitz.open()
-    page = doc.new_page()
-    text = (
-        "Enterprise Server Datasheet\n"
-        "Model: PowerEdge R760\n"
-        "Processors: Dual Intel Xeon Gold 6430\n"
-        "Memory: Up to 512GB DDR5 ECC\n"
-        "Storage: 150TB All-Flash NVMe\n"
-        "Power: Redundant 1600W Titanium PSUs\n"
-    )
-    page.insert_text((50, 50), text, fontsize=12)
     pdf_path = tmp_path / "text_only_spec.pdf"
-    doc.save(str(pdf_path))
-    doc.close()
-    return pdf_path
+    if fitz is not None:
+        try:
+            doc = fitz.open()
+            page = doc.new_page()
+            text = (
+                "Enterprise Server Datasheet\n"
+                "Model: PowerEdge R760\n"
+                "Processors: Dual Intel Xeon Gold 6430\n"
+                "Memory: Up to 512GB DDR5 ECC\n"
+                "Storage: 150TB All-Flash NVMe\n"
+                "Power: Redundant 1600W Titanium PSUs\n"
+            )
+            page.insert_text((50, 50), text, fontsize=12)
+            doc.save(str(pdf_path))
+            doc.close()
+            return pdf_path
+        except Exception:
+            pass
+    return _create_minimal_pdf(pdf_path, ["Enterprise Server Datasheet", "Model: PowerEdge R760", "Processors: Dual Intel Xeon Gold 6430", "Memory: Up to 512GB DDR5 ECC", "Storage: 150TB All-Flash NVMe", "Power: Redundant 1600W Titanium PSUs"])
 
 
 @pytest.fixture
 def sample_pdf_table_heavy(tmp_path: Path) -> Path:
     """Create a table-heavy PDF datasheet."""
-    doc = fitz.open()
-    page = doc.new_page()
-    page.insert_text((50, 50), "Technical Specification Matrix", fontsize=14)
-
-    # Draw table borders and cells
-    table_text = (
-        "Component\tSpecification\tDetails\n"
-        "Processor\tIntel Xeon Gold\t32 Cores per socket\n"
-        "RAM\t512GB DDR5\tRegistered ECC\n"
-        "Disks\t150TB NVMe\tU.2 Hot Swap\n"
-    )
-    page.insert_text((50, 100), table_text, fontsize=10)
     pdf_path = tmp_path / "table_heavy_spec.pdf"
-    doc.save(str(pdf_path))
-    doc.close()
-    return pdf_path
+    if fitz is not None:
+        try:
+            doc = fitz.open()
+            page = doc.new_page()
+            page.insert_text((50, 50), "Technical Specification Matrix", fontsize=14)
+            table_text = (
+                "Component\tSpecification\tDetails\n"
+                "Processor\tIntel Xeon Gold\t32 Cores per socket\n"
+                "RAM\t512GB DDR5\tRegistered ECC\n"
+                "Disks\t150TB NVMe\tU.2 Hot Swap\n"
+            )
+            page.insert_text((50, 100), table_text, fontsize=10)
+            doc.save(str(pdf_path))
+            doc.close()
+            return pdf_path
+        except Exception:
+            pass
+    return _create_minimal_pdf(pdf_path, ["Technical Specification Matrix", "Processor Intel Xeon Gold 32 Cores per socket", "RAM 512GB DDR5 Registered ECC", "Disks 150TB NVMe U.2 Hot Swap"])
 
 
 @pytest.fixture
@@ -100,6 +133,7 @@ def sample_excel_standard(tmp_path: Path) -> Path:
     """Create a standard RFP Excel template workbook."""
     wb = openpyxl.Workbook()
     ws = wb.active
+    assert ws is not None
     ws.title = "Technical Compliance"
 
     headers = ["Item #", "Technical Requirement", "Compliance Status", "Remarks / Evidence"]
@@ -136,6 +170,7 @@ def sample_excel_renamed_cols(tmp_path: Path) -> Path:
     """Create an Excel template with non-standard renamed headers and rearranged columns."""
     wb = openpyxl.Workbook()
     ws = wb.active
+    assert ws is not None
     ws.title = "Vendor Bids"
 
     # Rearranged order: Remarks first, then Specs, then Compliance, then Serial

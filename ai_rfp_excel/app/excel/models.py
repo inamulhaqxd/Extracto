@@ -8,8 +8,13 @@ class ColumnType(str, Enum):
     INDEX = "index"
     SECTION = "section"
     REQUIREMENT = "requirement"
+    OFFERED_SPEC = "offered_spec"
+    ANSWER = "answer"
+    PROPOSED = "proposed"
     VENDOR = "vendor"
     COMPLIANCE = "compliance"
+    TOTAL_MARKS = "total_marks"
+    MARKS = "marks"
     REMARKS = "remarks"
     UNKNOWN = "unknown"
 
@@ -32,8 +37,14 @@ class ExcelRequirement(BaseModel):
     source_cell: str
     source_range: str | None = None
     vendor_cells: dict[str, str] = Field(default_factory=dict)
+    offered_spec_cells: dict[str, str] = Field(default_factory=dict)
+    answer_cells: dict[str, str] = Field(default_factory=dict)
+    proposed_cells: dict[str, str] = Field(default_factory=dict)
     compliance_cells: dict[str, str] = Field(default_factory=dict)
+    total_marks_cells: dict[str, str] = Field(default_factory=dict)
+    marks_cells: dict[str, str] = Field(default_factory=dict)
     remarks_cells: dict[str, str] = Field(default_factory=dict)
+    empty_slots: list[str] = Field(default_factory=list)
     raw_values: dict[str, Any] = Field(default_factory=dict)
 
 

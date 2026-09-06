@@ -1,8 +1,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from ai_rfp_excel.app.ingestion.pdf.utils import calculate_file_hash, get_file_info, is_duplicate
 
 
@@ -27,9 +25,9 @@ def test_get_file_info() -> None:
 
     info = get_file_info(file_path)
 
-    assert info["filename"].endswith(".pdf")
-    assert len(info["file_hash"]) == 64
-    assert info["file_size"] > 0
+    assert str(info["filename"]).endswith(".pdf")
+    assert len(str(info["file_hash"])) == 64
+    assert int(info["file_size"]) > 0
     assert info["content_type"] == "application/pdf"
 
     Path(file_path).unlink()

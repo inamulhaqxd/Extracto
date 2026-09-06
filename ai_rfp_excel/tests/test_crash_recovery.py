@@ -2,7 +2,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 from ai_rfp_excel.app.ingestion.models import (
     ExtractedImage,
     ExtractedTable,
@@ -168,11 +167,7 @@ def test_provenance_tracking() -> None:
 
 
 def test_process_pdf_with_resume() -> None:
-    with patch("fitz.open") as mock_open:
-        mock_doc = MagicMock()
-        mock_doc.__len__.return_value = 3
-        mock_open.return_value = mock_doc
-
+    with patch("ai_rfp_excel.app.ingestion.pdf.processor.get_pdf_page_count", return_value=3):
         # Initial context with page 0 already done
         initial_context = ProcessingContext(
             document_id="doc-resume-999",

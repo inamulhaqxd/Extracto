@@ -4,11 +4,18 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.venv/
 venv/
 env/
 *.egg-info/
 dist/
 build/
+
+# Linters / Typecheck
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.cache/
 
 # Environment
 .env
@@ -21,26 +28,43 @@ build/
 *.swo
 
 # Data directories
+data/
 data/uploads/
 data/extracted/
 data/images/
 data/ocr/
 data/processed/
 data/generated/
+ai_rfp_excel/data/
 
 # Docker
 docker-compose.override.yml
 
-# Logs
-*.log
+# Test outputs
+testworkflowfile/*_populated_*.xlsx
+testworkflowfile/*_populated.xlsx
+testworkflowfile/output/
+pipeline_lab/output/
+Modelfile_qwen
 logs/
+
+# Frontend / Node / Next.js
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+out/
+**/out/
+.pnpm-store/
+**/.pnpm-store/
+*.tsbuildinfo
+next-env.d.ts
 
 # OS
 .DS_Store
 Thumbs.db
 
 # Test
-.pytest_cache/
 .coverage
 htmlcov/
 

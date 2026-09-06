@@ -1,7 +1,8 @@
-import openpyxl
-from openpyxl.styles import Border, Font, PatternFill, Side
 from pathlib import Path
+
+import openpyxl
 import pytest
+from openpyxl.styles import Border, Font, PatternFill, Side
 
 from ai_rfp_excel.app.excel.analyzer import ExcelAnalyzer
 from ai_rfp_excel.app.excel.validator import ExcelValidator

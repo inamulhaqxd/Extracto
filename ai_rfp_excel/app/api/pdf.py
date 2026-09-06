@@ -77,11 +77,21 @@ async def upload_pdf(
         else None
     )
 
-    import fitz
+    total_pages = 1
+    try:
+        import pdfplumber
 
-    doc = fitz.open(str(file_path))
-    total_pages = len(doc)
-    doc.close()
+        with pdfplumber.open(str(file_path)) as pdf:
+            total_pages = len(pdf.pages)
+    except Exception:
+        try:
+            import fitz
+
+            doc = fitz.open(str(file_path))
+            total_pages = len(doc)
+            doc.close()
+        except Exception:
+            total_pages = 1
 
     document = Document(
         id=uuid.UUID(file_id),

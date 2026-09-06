@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from ai_rfp_excel.app.config import settings
 from ai_rfp_excel.app.database.connection import Base
-from ai_rfp_excel.app.database.models import *  # noqa: F401, F403
+from ai_rfp_excel.app.database.models import *  # noqa: F403
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
