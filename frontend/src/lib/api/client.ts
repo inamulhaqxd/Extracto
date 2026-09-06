@@ -1,11 +1,12 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const REQUEST_TIMEOUT_MS = 15_000
-const TOKEN_KEY = 'tender_access_token'
+const TOKEN_KEY = 'extracto_access_token'
+const LEGACY_TOKEN_KEY = 'tender_access_token'
 
 export function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null
   try {
-    return localStorage.getItem(TOKEN_KEY)
+    return localStorage.getItem(TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY)
   } catch {
     return null
   }

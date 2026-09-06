@@ -11,13 +11,13 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     LOG_LEVEL: str = "INFO"
 
-    POSTGRES_USER: str = "tender_user"
-    POSTGRES_PASSWORD: str = "tender_pass"
-    POSTGRES_DB: str = "tender_db"
+    POSTGRES_USER: str = "extracto_user"
+    POSTGRES_PASSWORD: str = "extracto_pass"
+    POSTGRES_DB: str = "extracto_db"
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
 
-    DATABASE_URL: str = "postgresql+asyncpg://tender_user:tender_pass@localhost:5432/tender_db"
+    DATABASE_URL: str = "postgresql+asyncpg://extracto_user:extracto_pass@localhost:5432/extracto_db"
 
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_TEXT_MODEL: str = "qwen2.5:3b"

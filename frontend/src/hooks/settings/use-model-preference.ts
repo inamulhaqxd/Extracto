@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react'
 import { getModelPreference, setModelPreference } from '@/lib/api/ai'
 
-const LOCAL_MODEL_KEY = 'tender_preferred_model'
+const LOCAL_MODEL_KEY = 'extracto_preferred_model'
+const LEGACY_MODEL_KEY = 'tender_preferred_model'
 
 export function useModelPreference() {
   const [modelTag, setModelTagState] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null
     try {
-      return localStorage.getItem(LOCAL_MODEL_KEY)
+      return localStorage.getItem(LOCAL_MODEL_KEY) || localStorage.getItem(LEGACY_MODEL_KEY)
     } catch {
       return null
     }
