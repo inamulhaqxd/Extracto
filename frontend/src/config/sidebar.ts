@@ -17,7 +17,7 @@ export const sidebarData: { navGroups: NavGroup[] } = {
       title: 'Overview',
       items: [
         { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
-        { title: 'RFP Documents', url: '/rfp', icon: FileText },
+        { title: 'Specifications', url: '/rfp', icon: FileText },
       ],
     },
     {

@@ -31,7 +31,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           </span>
           <span className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
             <span className="text-sm font-semibold tracking-tight">Extracto AI</span>
-            <span className="text-xs text-muted-foreground">RFP Automation</span>
+            <span className="text-xs text-muted-foreground">Spec Intelligence</span>
           </span>
         </Link>
       </SidebarHeader>

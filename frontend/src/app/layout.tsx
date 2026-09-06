@@ -10,7 +10,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Extracto AI",
-  description: "AI-powered RFP analysis, spec extraction, and compliance matrix automation",
+  description: "AI-powered specification analysis, requirement extraction, and compliance matrix automation",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -30,7 +30,7 @@ export function SignInBrandPanel() {
               Extracto AI
             </span>
             <span className="text-muted-foreground text-xs tracking-tight">
-              RFP Automation
+              Spec Intelligence
             </span>
           </span>
         </Link>
@@ -48,11 +48,11 @@ export function SignInBrandPanel() {
           </div>
 
           <h2 className="mt-5 max-w-md text-3xl font-semibold tracking-tight text-balance">
-            Streamline your RFP and specification workflows
+            Automate Technical Specifications &amp; Compliance
           </h2>
           <p className="text-muted-foreground mt-3 max-w-md text-sm leading-relaxed text-pretty">
-            Upload RFP documents, extract requirements with AI, and generate
-            compliant responses — all in one place.
+            Upload specification documents, extract requirements with AI, and generate
+            compliant Excel sheets — all in one place.
           </p>
 
           <div className="mt-8 flex items-center justify-between gap-4">
