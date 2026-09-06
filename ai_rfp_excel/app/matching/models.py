@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -25,7 +24,7 @@ class FactItem(BaseModel):
     source_type: str = "text"  # text, table, image, ocr
     confidence: float = 1.0
     extraction_method: str = "native"
-    metadata_json: dict[str, Any] | None = None
+    metadata_json: dict[str, object] | None = None
 
 
 class EvidenceItem(BaseModel):
@@ -39,16 +38,7 @@ class EvidenceItem(BaseModel):
     extraction_method: str
     citation: str
     reasoning: str | None = None
-    metadata_json: dict[str, Any] | None = None
-
-
-class LayerResult(BaseModel):
-    layer_name: str
-    state: ComplianceState
-    confidence: float = Field(ge=0.0, le=1.0)
-    reasoning: str
-    matched_value: str | None = None
-    evidence: list[EvidenceItem] = Field(default_factory=list)
+    metadata_json: dict[str, object] | None = None
 
 
 class ComplianceDecision(BaseModel):
@@ -62,4 +52,4 @@ class ComplianceDecision(BaseModel):
     resolving_layer: str
     evidence: list[EvidenceItem] = Field(default_factory=list)
     conflicting_evidence: list[EvidenceItem] = Field(default_factory=list)
-    metadata_json: dict[str, Any] | None = None
+    metadata_json: dict[str, object] | None = None

@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Any, TypeVar
+from typing import TypeVar, overload
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -164,6 +164,30 @@ class LocalLLMProvider(LLMInterface):
         except httpx.TimeoutException as e:
             raise LLMTimeoutError(f"Ollama request timed out after {timeout} seconds") from e
 
+    @overload
+    async def chat(
+        self,
+        messages: list[ChatMessage],
+        response_model: type[T],
+        model: str | None = None,
+        temperature: float | None = None,
+        timeout: float | None = None,
+        **kwargs: object,
+    ) -> T:
+        ...
+
+    @overload
+    async def chat(
+        self,
+        messages: list[ChatMessage],
+        response_model: None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        timeout: float | None = None,
+        **kwargs: object,
+    ) -> str:
+        ...
+
     async def chat(
         self,
         messages: list[ChatMessage],
@@ -171,8 +195,8 @@ class LocalLLMProvider(LLMInterface):
         model: str | None = None,
         temperature: float | None = None,
         timeout: float | None = None,
-        **kwargs: Any,
-    ) -> Any:
+        **kwargs: object,
+    ) -> T | str:
         model_name = model or self.default_model
         temp = temperature if temperature is not None else self.temperature
         req_timeout = timeout if timeout is not None else self.timeout

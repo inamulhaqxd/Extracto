@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, TypeVar
+from typing import TypeVar, overload
 
 from pydantic import BaseModel
 
@@ -58,6 +58,30 @@ class LLMTimeoutError(LLMError):
 class LLMInterface(ABC):
     """Abstract interface defining required LLM capabilities for the RFP pipeline."""
 
+    @overload
+    async def chat(
+        self,
+        messages: list[ChatMessage],
+        response_model: type[T],
+        model: str | None = None,
+        temperature: float | None = None,
+        timeout: float | None = None,
+        **kwargs: object,
+    ) -> T:
+        ...
+
+    @overload
+    async def chat(
+        self,
+        messages: list[ChatMessage],
+        response_model: None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        timeout: float | None = None,
+        **kwargs: object,
+    ) -> str:
+        ...
+
     @abstractmethod
     async def chat(
         self,
@@ -66,8 +90,8 @@ class LLMInterface(ABC):
         model: str | None = None,
         temperature: float | None = None,
         timeout: float | None = None,
-        **kwargs: Any,
-    ) -> Any:
+        **kwargs: object,
+    ) -> T | str:
         """Send chat messages to the LLM and optionally validate response against response_model.
 
         If response_model is provided:

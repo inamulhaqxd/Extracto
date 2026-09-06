@@ -1,5 +1,5 @@
 import json
-from typing import Any, TypeVar
+from typing import TypeVar, overload
 
 from pydantic import BaseModel, ValidationError
 
@@ -29,7 +29,7 @@ class MockLLMProvider(LLMInterface):
         self,
         default_model: str = "qwen3:4b",
         available_models: list[str] | None = None,
-        responses: list[Any] | None = None,
+        responses: list[object] | None = None,
         simulate_unreachable: bool = False,
         simulate_timeout: bool = False,
     ) -> None:
@@ -39,15 +39,15 @@ class MockLLMProvider(LLMInterface):
             if available_models is not None
             else [m.tag.lower() for m in AVAILABLE_MODELS]
         )
-        self.responses: list[Any] = responses or []
+        self.responses: list[object] = responses or []
         self.simulate_unreachable = simulate_unreachable
         self.simulate_timeout = simulate_timeout
-        self.call_history: list[dict[str, Any]] = []
+        self.call_history: list[dict[str, object]] = []
 
-    def set_responses(self, responses: list[Any]) -> None:
+    def set_responses(self, responses: list[object]) -> None:
         self.responses = list(responses)
 
-    def add_response(self, response: Any) -> None:
+    def add_response(self, response: object) -> None:
         self.responses.append(response)
 
     async def is_model_available(self, model_tag: str) -> bool:
@@ -85,6 +85,30 @@ class MockLLMProvider(LLMInterface):
             )
         return result
 
+    @overload
+    async def chat(
+        self,
+        messages: list[ChatMessage],
+        response_model: type[T],
+        model: str | None = None,
+        temperature: float | None = None,
+        timeout: float | None = None,
+        **kwargs: object,
+    ) -> T:
+        ...
+
+    @overload
+    async def chat(
+        self,
+        messages: list[ChatMessage],
+        response_model: None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        timeout: float | None = None,
+        **kwargs: object,
+    ) -> str:
+        ...
+
     async def chat(
         self,
         messages: list[ChatMessage],
@@ -92,8 +116,8 @@ class MockLLMProvider(LLMInterface):
         model: str | None = None,
         temperature: float | None = None,
         timeout: float | None = None,
-        **kwargs: Any,
-    ) -> Any:
+        **kwargs: object,
+    ) -> T | str:
         model_name = model or self.default_model
 
         if self.simulate_unreachable:

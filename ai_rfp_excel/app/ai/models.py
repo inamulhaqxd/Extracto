@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -132,7 +131,7 @@ class ComplianceAnalysisResult(BaseModel):
     reasoning: str
     matched_value: str | None = None
     evidence_text: str | None = None
-    structured_constraints: dict[str, Any] | None = None
+    structured_constraints: dict[str, object] | None = None
 
 
 class EvidenceResult(BaseModel):
