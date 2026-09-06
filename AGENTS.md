@@ -26,7 +26,7 @@ Pipeline pattern. Each phase is an independent module with defined inputs/output
 
 - Python 3.11+
 - FastAPI for backend
-- Streamlit for frontend
+- Next.js for frontend
 - SQLAlchemy 2.0 + Alembic for database
 - pytest for testing
 - Pydantic for validation
@@ -91,7 +91,7 @@ Use the `skill` tool to load the relevant skill before working on matching tasks
 
 | Skill | When to Use |
 |-------|-------------|
-| `docker-expert` | Docker Compose setup (FastAPI + Streamlit + PostgreSQL + Ollama), multi-stage builds, volume config |
+| `docker-expert` | Docker Compose setup (FastAPI + Next.js + PostgreSQL + Ollama), multi-stage builds, volume config |
 | `ci-security-scanning` | GitHub Actions setup: secrets scanning, dependency audit, SAST for the pipeline codebase |
 
 ### ACT Workflow Skills
@@ -108,9 +108,8 @@ Use the `skill` tool to load the relevant skill before working on matching tasks
 
 ### Skills NOT Applicable to This Project
 
-These are global skills but do not apply to this Python/FastAPI/Streamlit project:
+These are global skills that do not apply to this project:
 - `act-flutter-*`, `act-dart-*`, `act-figma-to-flutter` — Flutter/Dart only
-- `act-web-*`, `next-*`, `typescript-*`, `tailwind-*`, `react-*`, `vercel-*`, `motion-*`, `nextjs_*` — Next.js/React only
 - `supabase*` — We use PostgreSQL directly, not Supabase
 - `design-system`, `web-design-guidelines` — UI design review, not relevant for pipeline logic
 
