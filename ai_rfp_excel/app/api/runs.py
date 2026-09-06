@@ -5,11 +5,12 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ai_rfp_excel.app.api.deps import get_current_user
+from ai_rfp_excel.app.api.deps import get_current_user, get_current_user_flexible
 from ai_rfp_excel.app.config import settings
 from ai_rfp_excel.app.database.connection import async_session, get_db
 from ai_rfp_excel.app.database.models import (
@@ -164,7 +165,7 @@ async def execute_pipeline_background(
             if decisions_json_path.exists():
                 with open(decisions_json_path, "r", encoding="utf-8") as f:
                     dec_data = json.load(f)
-                    raw_decisions = dec_data.get("decisions", [])
+                    raw_decisions = dec_data.get("items") or dec_data.get("decisions") or []
 
             run_res_final = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_id))
             final_run = run_res_final.scalar_one_or_none()
@@ -302,10 +303,23 @@ async def get_run_status(
     meta = run.metadata_json or {}
     raw_decisions = meta.get("decisions")
     decisions_items: list[dict[str, object]] = []
-    if isinstance(raw_decisions, list):
+    if isinstance(raw_decisions, list) and len(raw_decisions) > 0:
         for item in raw_decisions:
             if isinstance(item, dict):
                 decisions_items.append({str(k): v for k, v in item.items()})
+    else:
+        decisions_json_path = Path(settings.GENERATED_DIR) / str(run.id) / "compliance_decisions.json"
+        if decisions_json_path.exists():
+            try:
+                with open(decisions_json_path, "r", encoding="utf-8") as f:
+                    disk_data = json.load(f)
+                    disk_items = disk_data.get("items") or disk_data.get("decisions") or []
+                    if isinstance(disk_items, list):
+                        for item in disk_items:
+                            if isinstance(item, dict):
+                                decisions_items.append({str(k): v for k, v in item.items()})
+            except Exception:
+                pass
 
     decisions_list: list[RunDecisionResponse] = []
     comp_cnt = 0
@@ -319,6 +333,7 @@ async def get_run_status(
         conf_raw = d.get("confidence")
         conf = float(str(conf_raw)) if conf_raw is not None else 1.0
         m_val = str(d.get("extracted_value") or d.get("matched_value")) if (d.get("extracted_value") or d.get("matched_value")) else None
+        reasoning_val = str(d.get("reasoning") or d.get("remarks") or "") if (d.get("reasoning") or d.get("remarks")) else None
 
         if "COMPLIANT" in state_val and "NON" not in state_val and "PARTIAL" not in state_val:
             comp_cnt += 1
@@ -338,6 +353,12 @@ async def get_run_status(
             for ev_item in ev_raw:
                 if isinstance(ev_item, dict):
                     ev_list.append({str(k): v for k, v in ev_item.items()})
+        elif d.get("citation"):
+            ev_list.append({
+                "citation": str(d.get("citation")),
+                "value": m_val or "",
+                "location": str(d.get("sheet_name") or ""),
+            })
 
         decisions_list.append(
             RunDecisionResponse(
@@ -346,7 +367,7 @@ async def get_run_status(
                 section=str(d.get("section")) if d.get("section") else None,
                 status=state_val,
                 confidence=conf,
-                reasoning=str(d.get("reasoning")) if d.get("reasoning") else None,
+                reasoning=reasoning_val,
                 matched_value=m_val,
                 resolving_layer=str(d.get("resolving_layer")) if d.get("resolving_layer") else None,
                 evidence=ev_list,
@@ -460,7 +481,7 @@ async def submit_run_review(
             output_dir.mkdir(parents=True, exist_ok=True)
             decisions_json_path = output_dir / "compliance_decisions.json"
             with open(decisions_json_path, "w", encoding="utf-8") as f:
-                json.dump({"decisions": updated_decisions}, f, indent=2, ensure_ascii=False)
+                json.dump({"items": updated_decisions, "decisions": updated_decisions}, f, indent=2, ensure_ascii=False)
             out_excel_path = output_dir / f"{wb_path.stem}_populated.xlsx"
             manifest_json_path = output_dir / "population_manifest.json"
             populate_excel(wb_path, decisions_json_path, out_excel_path, manifest_json_path)
@@ -472,6 +493,55 @@ async def submit_run_review(
     await db.commit()
 
     return await get_run_status(run_id, current_user, db)
+
+
+@router.get("/{run_id}/download")
+async def download_run_excel(
+    run_id: str,
+    current_user: User = Depends(get_current_user_flexible),
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    """Download populated Excel file for a specific run."""
+    try:
+        run_uuid = uuid.UUID(run_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid run_id format") from e
+
+    res = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_uuid))
+    run = res.scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+
+    meta = run.metadata_json or {}
+    gen_file_path_str = meta.get("generated_file_path")
+    file_path: Path | None = None
+    if gen_file_path_str:
+        p = Path(str(gen_file_path_str))
+        if p.exists():
+            file_path = p
+
+    if not file_path:
+        run_dir = Path(settings.GENERATED_DIR) / str(run_uuid)
+        if run_dir.exists():
+            candidates = list(run_dir.glob("*_populated.xlsx"))
+            if candidates:
+                file_path = candidates[0]
+
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Populated Excel file not found on server")
+
+    download_name = str(meta.get("workbook_filename") or file_path.name)
+    if not download_name.endswith(".xlsx"):
+        download_name += ".xlsx"
+    if "_populated" not in download_name:
+        stem = Path(download_name).stem
+        download_name = f"{stem}_populated.xlsx"
+
+    return FileResponse(
+        path=str(file_path),
+        filename=download_name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @router.get("", response_model=list[RunResponse])

@@ -1,15 +1,33 @@
 'use client'
 
-import { CheckCircle2, Download, FileSpreadsheet } from 'lucide-react'
+import { useState } from 'react'
+import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, Loader2 } from 'lucide-react'
 import type { ProcessingRun } from '@/types'
+import { downloadExcelFile } from '@/lib/api/runs'
 import { useDecisionCounts } from '@/hooks/runs/use-decision-counts'
 import { SummaryCard } from '@/components/runs/summary-card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item'
 
 export function StageExport({ run }: { run: ProcessingRun }) {
   const counts = useDecisionCounts(run.decisions)
+  const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+
+  const handleDownload = async () => {
+    try {
+      setDownloading(true)
+      setDownloadError(null)
+      await downloadExcelFile(run.excel_filename, run.id)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Download failed'
+      setDownloadError(msg)
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -34,6 +52,13 @@ export function StageExport({ run }: { run: ProcessingRun }) {
         <SummaryCard label="Exported as Extracted" value={counts.pending} />
       </div>
 
+      {downloadError && (
+        <Alert variant="destructive">
+          <AlertCircle className="size-4" />
+          <AlertDescription>{downloadError}</AlertDescription>
+        </Alert>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Export</CardTitle>
@@ -49,9 +74,22 @@ export function StageExport({ run }: { run: ProcessingRun }) {
               <ItemDescription>Compliance Summary included</ItemDescription>
             </ItemContent>
             <ItemActions>
-              <Button size="sm">
-                <Download aria-hidden="true" />
-                Download
+              <Button
+                size="sm"
+                onPress={handleDownload}
+                isDisabled={downloading}
+              >
+                {downloading ? (
+                  <>
+                    <Loader2 aria-hidden="true" className="animate-spin" />
+                    Downloading...
+                  </>
+                ) : (
+                  <>
+                    <Download aria-hidden="true" />
+                    Download
+                  </>
+                )}
               </Button>
             </ItemActions>
           </Item>

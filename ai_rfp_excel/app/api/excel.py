@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ai_rfp_excel.app.api.deps import get_current_user
+from ai_rfp_excel.app.api.deps import get_current_user, get_current_user_flexible
 from ai_rfp_excel.app.config import settings
 from ai_rfp_excel.app.database.connection import get_db
 from ai_rfp_excel.app.database.models import Requirement, User, Workbook, WorkbookSheet
@@ -334,15 +334,19 @@ async def populate_excel_workbook(
 @router.get("/download/{filename}")
 async def download_populated_excel(
     filename: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_flexible),
 ) -> FileResponse:
     """Download populated Excel file from output directory."""
     file_path = Path(settings.OUTPUT_DIR) / filename
     if not file_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"File '{filename}' not found in output directory",
-        )
+        matching = list(Path(settings.OUTPUT_DIR).rglob(filename))
+        if matching:
+            file_path = matching[0]
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"File '{filename}' not found in output directory",
+            )
 
     return FileResponse(
         path=str(file_path),

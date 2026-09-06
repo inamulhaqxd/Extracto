@@ -135,8 +135,39 @@ export async function submitRunReview(
   })
 }
 
-export function getExcelDownloadUrl(filename: string): string {
-  return `${API_BASE}/excel/download/${encodeURIComponent(filename)}`
+export function getExcelDownloadUrl(filename: string, runId?: string): string {
+  const token = getAuthToken()
+  const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : ''
+  if (runId) {
+    return `${API_BASE}/runs/${encodeURIComponent(runId)}/download${tokenQuery}`
+  }
+  return `${API_BASE}/excel/download/${encodeURIComponent(filename)}${tokenQuery}`
+}
+
+export async function downloadExcelFile(filename: string, runId?: string): Promise<void> {
+  const token = getAuthToken()
+  const url = getExcelDownloadUrl(filename, runId)
+  const res = await fetch(url, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    const error = (await res.json().catch(() => ({}))) as { detail?: string; message?: string }
+    throw new Error(error.detail || error.message || `Download failed (HTTP ${res.status})`)
+  }
+
+  const blob = await res.blob()
+  const blobUrl = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(blobUrl)
 }
 
 export function transformBackendRun(backend: BackendRunResponse): ProcessingRun {
