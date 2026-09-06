@@ -3,8 +3,17 @@
 import { useEffect, useState } from 'react'
 import { getModelPreference, setModelPreference } from '@/lib/api/ai'
 
+const LOCAL_MODEL_KEY = 'tender_preferred_model'
+
 export function useModelPreference() {
-  const [modelTag, setModelTagState] = useState<string | null>(null)
+  const [modelTag, setModelTagState] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    try {
+      return localStorage.getItem(LOCAL_MODEL_KEY)
+    } catch {
+      return null
+    }
+  })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -13,7 +22,14 @@ export function useModelPreference() {
 
     getModelPreference()
       .then((pref) => {
-        if (mounted) setModelTagState(pref.model_tag)
+        if (mounted && pref.model_tag) {
+          setModelTagState(pref.model_tag)
+          try {
+            localStorage.setItem(LOCAL_MODEL_KEY, pref.model_tag)
+          } catch {
+            // Ignore localStorage errors
+          }
+        }
       })
       .catch(() => undefined)
       .finally(() => {
@@ -27,9 +43,18 @@ export function useModelPreference() {
 
   async function setModelTag(tag: string) {
     setSaving(true)
+    setModelTagState(tag)
+    try {
+      localStorage.setItem(LOCAL_MODEL_KEY, tag)
+    } catch {
+      // Ignore localStorage errors
+    }
+
     try {
       const pref = await setModelPreference(tag)
       setModelTagState(pref.model_tag)
+    } catch (err: unknown) {
+      console.warn('Failed to sync model preference to backend:', err)
     } finally {
       setSaving(false)
     }

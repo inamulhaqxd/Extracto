@@ -49,6 +49,11 @@ class Settings(BaseSettings):
 
     SECRET_KEY: str = "change-me-in-production"
     ALLOWED_EXTENSIONS: str = ".pdf,.xlsx,.xls"
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    @property
+    def CORS_ORIGINS_LIST(self) -> list[str]:
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
     @property
     def ALLOWED_EXTENSIONS_LIST(self) -> list[str]:

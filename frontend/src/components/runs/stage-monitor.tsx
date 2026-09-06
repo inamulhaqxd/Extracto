@@ -1,10 +1,11 @@
 'use client'
 
-import { CheckCircle2, ChevronLeft, Loader2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronLeft, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ProcessingRun } from '@/types'
 import { RUN_STATUS_BADGE_VARIANT, RUN_STATUS_LABEL } from '@/lib/run-status'
 import { useAdvanceWhenComplete } from '@/hooks/runs/use-advance-when-complete'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
@@ -56,6 +57,13 @@ export function StageMonitor({
           </div>
         </div>
       </div>
+
+      {run.error_message && (
+        <Alert variant="destructive">
+          <AlertTriangle className="size-4" />
+          <AlertDescription>{run.error_message}</AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div>

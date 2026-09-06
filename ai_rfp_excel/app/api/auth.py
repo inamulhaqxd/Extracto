@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, select
@@ -54,7 +56,7 @@ class MessageResponse(BaseModel):
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
     result = await db.execute(select(User).where((User.email == request.email) | (User.username == request.username)))
-    existing: User | None = result.scalar_one_or_none()
+    existing: User | None = result.scalars().first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -72,7 +74,8 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
         is_admin=is_admin,
     )
     db.add(user)
-    await db.flush()
+    await db.commit()
+    await db.refresh(user)
 
     token: str = create_access_token(data={"sub": str(user.id)})
     return TokenResponse(
@@ -96,7 +99,7 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
         )
 
     result = await db.execute(select(User).where((User.email == identifier) | (User.username == identifier)))
-    user: User | None = result.scalar_one_or_none()
+    user: User | None = result.scalars().first()
 
     if user is None or not verify_password(request.password, user.hashed_password):
         raise HTTPException(
@@ -133,7 +136,15 @@ async def reset_password(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    result = await db.execute(select(User).where(User.id == request.user_id))
+    try:
+        user_uuid = uuid.UUID(request.user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid user ID format",
+        ) from None
+
+    result = await db.execute(select(User).where(User.id == user_uuid))
     user: User | None = result.scalar_one_or_none()
 
     if user is None:
@@ -144,6 +155,7 @@ async def reset_password(
 
     user.hashed_password = hash_password(request.new_password)
     db.add(user)
+    await db.commit()
 
     return MessageResponse(message=f"Password reset for user {user.username}")
 

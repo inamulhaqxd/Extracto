@@ -1,5 +1,3 @@
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -92,7 +90,7 @@ async def update_user_model_preference(
         )
 
     # Update user's metadata and persist to DB
-    meta: dict[str, Any] = dict(current_user.metadata_json) if hasattr(current_user, "metadata_json") and current_user.metadata_json else {}
+    meta: dict[str, object] = dict(current_user.metadata_json) if hasattr(current_user, "metadata_json") and current_user.metadata_json else {}
     meta["preferred_llm_model"] = matched.tag
     current_user.metadata_json = meta
     flag_modified(current_user, "metadata_json")

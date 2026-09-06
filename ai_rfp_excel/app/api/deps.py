@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
@@ -29,7 +31,15 @@ async def get_current_user(
             detail="Invalid token payload",
         )
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token subject",
+        ) from None
+
+    result = await db.execute(select(User).where(User.id == user_uuid))
     user: User | None = result.scalar_one_or_none()
 
     if user is None or not user.is_active:

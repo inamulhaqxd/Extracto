@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_rfp_excel.app.api.deps import get_current_user
 from ai_rfp_excel.app.config import settings
-from ai_rfp_excel.app.database.connection import get_db
+from ai_rfp_excel.app.database.connection import async_session, get_db
 from ai_rfp_excel.app.database.models import (
     Document,
     ProcessingRun,
@@ -42,12 +42,17 @@ class ReviewItem(BaseModel):
     matched_value: str | None = None
     confidence: float | None = None
     review_notes: str | None = None
-    override_reason: str | None = None
 
 
 class SubmitReviewRequest(BaseModel):
     model_config = {"protected_namespaces": ()}
     reviews: list[ReviewItem]
+
+
+class EvidenceItemResponse(BaseModel):
+    citation: str
+    value: str
+    location: str | None = None
 
 
 class RunDecisionResponse(BaseModel):
@@ -94,107 +99,107 @@ async def execute_pipeline_background(
     model_name: str | None,
     vendor_name: str | None,
     include_summary_sheet: bool,
-    db: AsyncSession,
 ) -> None:
     """Execute end-to-end extraction, matching, and excel population pipeline."""
-    try:
-        # Step 1: Initialize run record
-        run_res = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_id))
-        run = run_res.scalar_one_or_none()
-        if not run or run.status == "cancelled":
-            return
+    async with async_session() as db:
+        try:
+            # Step 1: Initialize run record
+            run_res = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_id))
+            run = run_res.scalar_one_or_none()
+            if not run or run.status == "cancelled":
+                return
 
-        run.status = "processing"
-        run.started_at = datetime.now()
-        run.progress = 10.0
-        run.current_step = "Analyzing Excel template and mapping empty slots"
-        await db.commit()
-
-        # Step 2: Load and analyze Excel workbook
-        wb_res = await db.execute(select(Workbook).where(Workbook.id == wb_id))
-        wb_record = wb_res.scalar_one_or_none()
-        if not wb_record:
-            raise ValueError(f"Workbook {wb_id} not found")
-
-        wb_path = Path(settings.UPLOAD_DIR) / wb_record.filename
-        if not wb_path.exists():
-            raise FileNotFoundError(f"Workbook file {wb_path} not found")
-
-        # Step 3: Locate PDF document file
-        doc_res = await db.execute(select(Document).where(Document.id == pdf_doc_id))
-        doc_rec = doc_res.scalar_one_or_none()
-        if not doc_rec:
-            raise ValueError(f"PDF Document {pdf_doc_id} not found")
-
-        pdf_path = Path(settings.UPLOAD_DIR) / doc_rec.filename
-        if not pdf_path.exists():
-            pdf_path = Path(settings.UPLOAD_DIR) / f"{pdf_doc_id}.pdf"
-        if not pdf_path.exists():
-            raise FileNotFoundError(f"PDF file {pdf_path} not found")
-
-        output_dir = Path(settings.GENERATED_DIR) / str(run_id)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        out_excel_path = output_dir / f"{wb_path.stem}_populated.xlsx"
-
-        async def on_progress(progress: float, message: str) -> None:
-            chk = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_id))
-            curr_run = chk.scalar_one_or_none()
-            if not curr_run or curr_run.status == "cancelled":
-                raise asyncio.CancelledError("Run cancelled by user")
-            curr_run.progress = progress
-            curr_run.current_step = message
+            run.status = "processing"
+            run.started_at = datetime.now()
+            run.progress = 10.0
+            run.current_step = "Analyzing Excel template and mapping empty slots"
             await db.commit()
 
-        orchestrator = PipelineOrchestrator(progress_callback=on_progress)
-        pipeline_res = await orchestrator.run(
-            pdf_path=pdf_path,
-            excel_path=wb_path,
-            output_dir=output_dir,
-            output_excel_path=out_excel_path,
-            model_name=model_name,
-        )
+            # Step 2: Load and analyze Excel workbook
+            wb_res = await db.execute(select(Workbook).where(Workbook.id == wb_id))
+            wb_record = wb_res.scalar_one_or_none()
+            if not wb_record:
+                raise ValueError(f"Workbook {wb_id} not found")
 
-        decisions_json_path = output_dir / "compliance_decisions.json"
-        raw_decisions: list[dict[str, object]] = []
-        if decisions_json_path.exists():
-            with open(decisions_json_path, "r", encoding="utf-8") as f:
-                dec_data = json.load(f)
-                raw_decisions = dec_data.get("decisions", [])
+            wb_path = Path(settings.UPLOAD_DIR) / wb_record.filename
+            if not wb_path.exists():
+                raise FileNotFoundError(f"Workbook file {wb_path} not found")
 
-        run_res_final = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_id))
-        final_run = run_res_final.scalar_one_or_none()
-        if not final_run:
-            return
+            # Step 3: Locate PDF document file
+            doc_res = await db.execute(select(Document).where(Document.id == pdf_doc_id))
+            doc_rec = doc_res.scalar_one_or_none()
+            if not doc_rec:
+                raise ValueError(f"PDF Document {pdf_doc_id} not found")
 
-        final_run.status = "completed"
-        final_run.progress = 100.0
-        final_run.current_step = "Completed successfully. Ready for review and download."
-        final_run.completed_at = datetime.now()
-        final_run.metadata_json = {
-            "vendor_name": vendor_name,
-            "pdf_filename": doc_rec.original_filename,
-            "workbook_filename": wb_record.original_filename,
-            "generated_file": out_excel_path.name,
-            "generated_file_path": str(out_excel_path),
-            "total_requirements": pipeline_res.total_requirements,
-            "decisions": raw_decisions,
-            "manifest": pipeline_res.manifest,
-        }
-        await db.commit()
-        logger.info("Pipeline run completed successfully", run_id=str(run_id), generated_file=out_excel_path.name)
+            pdf_path = Path(settings.UPLOAD_DIR) / doc_rec.filename
+            if not pdf_path.exists():
+                pdf_path = Path(settings.UPLOAD_DIR) / f"{pdf_doc_id}.pdf"
+            if not pdf_path.exists():
+                raise FileNotFoundError(f"PDF file {pdf_path} not found")
 
-    except asyncio.CancelledError:
-        logger.info("Pipeline run cancelled by user", run_id=str(run_id))
-    except Exception as e:
-        logger.error("Pipeline execution failed", run_id=str(run_id), error=str(e), exc_info=True)
-        run_res = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_id))
-        run = run_res.scalar_one_or_none()
-        if run:
-            run.status = "failed"
-            run.error_message = str(e)
-            run.current_step = f"Failed: {e!s}"
-            run.completed_at = datetime.now()
+            output_dir = Path(settings.GENERATED_DIR) / str(run_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            out_excel_path = output_dir / f"{wb_path.stem}_populated.xlsx"
+
+            async def on_progress(progress: float, message: str) -> None:
+                chk = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_id))
+                curr_run = chk.scalar_one_or_none()
+                if not curr_run or curr_run.status == "cancelled":
+                    raise asyncio.CancelledError("Run cancelled by user")
+                curr_run.progress = progress
+                curr_run.current_step = message
+                await db.commit()
+
+            orchestrator = PipelineOrchestrator(progress_callback=on_progress)
+            pipeline_res = await orchestrator.run(
+                pdf_path=pdf_path,
+                excel_path=wb_path,
+                output_dir=output_dir,
+                output_excel_path=out_excel_path,
+                model_name=model_name,
+            )
+
+            decisions_json_path = output_dir / "compliance_decisions.json"
+            raw_decisions: list[dict[str, object]] = []
+            if decisions_json_path.exists():
+                with open(decisions_json_path, "r", encoding="utf-8") as f:
+                    dec_data = json.load(f)
+                    raw_decisions = dec_data.get("decisions", [])
+
+            run_res_final = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_id))
+            final_run = run_res_final.scalar_one_or_none()
+            if not final_run:
+                return
+
+            final_run.status = "completed"
+            final_run.progress = 100.0
+            final_run.current_step = "Completed successfully. Ready for review and download."
+            final_run.completed_at = datetime.now()
+            final_run.metadata_json = {
+                "vendor_name": vendor_name,
+                "pdf_filename": doc_rec.original_filename,
+                "workbook_filename": wb_record.original_filename,
+                "generated_file": out_excel_path.name,
+                "generated_file_path": str(out_excel_path),
+                "total_requirements": pipeline_res.total_requirements,
+                "decisions": raw_decisions,
+                "manifest": pipeline_res.manifest,
+            }
             await db.commit()
+            logger.info("Pipeline run completed successfully", run_id=str(run_id), generated_file=out_excel_path.name)
+
+        except asyncio.CancelledError:
+            logger.info("Pipeline run cancelled by user", run_id=str(run_id))
+        except Exception as e:
+            logger.error("Pipeline execution failed", run_id=str(run_id), error=str(e), exc_info=True)
+            run_res = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_id))
+            run = run_res.scalar_one_or_none()
+            if run:
+                run.status = "failed"
+                run.error_message = str(e)
+                run.current_step = f"Failed: {e!s}"
+                run.completed_at = datetime.now()
+                await db.commit()
 
 
 @router.post("", response_model=RunResponse, status_code=status.HTTP_201_CREATED)
@@ -225,7 +230,14 @@ async def create_processing_run(
     if not wb_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workbook not found")
 
-    selected_model = request.model_name or settings.DEFAULT_LLM_MODEL
+    selected_model = request.model_name
+    if not selected_model:
+        meta = current_user.metadata_json if hasattr(current_user, "metadata_json") and current_user.metadata_json else {}
+        if isinstance(meta, dict) and meta.get("preferred_llm_model"):
+            selected_model = str(meta["preferred_llm_model"])
+        else:
+            selected_model = settings.DEFAULT_LLM_MODEL
+
     run_id = uuid.uuid4()
 
     run = ProcessingRun(
@@ -247,7 +259,7 @@ async def create_processing_run(
     db.add(run)
     await db.commit()
 
-    # Launch background task
+    # Launch background task with its own independent session
     background_tasks.add_task(
         execute_pipeline_background,
         run_id=run_id,
@@ -256,7 +268,6 @@ async def create_processing_run(
         model_name=selected_model,
         vendor_name=request.vendor_name,
         include_summary_sheet=request.include_summary_sheet,
-        db=db,
     )
 
     return RunResponse(

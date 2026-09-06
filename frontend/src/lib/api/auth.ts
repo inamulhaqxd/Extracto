@@ -1,5 +1,5 @@
 import type { LoginRequest, TokenResponse, User } from '@/types'
-import { apiFetch } from './client'
+import { apiFetch, removeAuthToken } from './client'
 
 export function login(data: LoginRequest): Promise<TokenResponse> {
   return apiFetch<TokenResponse>('/auth/login', {
@@ -13,5 +13,6 @@ export function getMe(): Promise<User> {
 }
 
 export function logout(): Promise<unknown> {
-  return apiFetch('/auth/logout', { method: 'POST' })
+  removeAuthToken()
+  return apiFetch('/auth/logout', { method: 'POST' }).catch(() => ({}))
 }

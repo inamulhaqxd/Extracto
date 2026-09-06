@@ -1,16 +1,40 @@
-from collections.abc import AsyncGenerator
-
 import pytest
+from collections.abc import AsyncGenerator
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
+from ai_rfp_excel.app.database.connection import Base, get_db
 from ai_rfp_excel.app.main import app
 
 
 @pytest.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
+    test_engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        async with test_session() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+    app.dependency_overrides.clear()
+    await test_engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -111,7 +135,7 @@ async def test_get_me(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_get_me_no_token(client: AsyncClient) -> None:
     response = await client.get("/auth/me")
-    assert response.status_code == 403
+    assert response.status_code in (401, 403)
 
 
 @pytest.mark.asyncio

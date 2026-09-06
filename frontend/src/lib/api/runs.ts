@@ -1,4 +1,4 @@
-import { apiFetch } from './client'
+import { apiFetch, getAuthToken } from './client'
 import type { ProcessingRun, DecisionStatus } from '@/types'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -64,8 +64,14 @@ export async function uploadPdf(file: File): Promise<UploadPdfResponse> {
   const formData = new FormData()
   formData.append('file', file)
 
+  const token = getAuthToken()
+  const headers: Record<string, string> = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+
   const res = await fetch(`${API_BASE}/pdf/upload`, {
     method: 'POST',
+    headers,
     body: formData,
     credentials: 'include',
   })
@@ -82,8 +88,14 @@ export async function uploadExcel(file: File): Promise<UploadExcelResponse> {
   const formData = new FormData()
   formData.append('file', file)
 
+  const token = getAuthToken()
+  const headers: Record<string, string> = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+
   const res = await fetch(`${API_BASE}/excel/upload`, {
     method: 'POST',
+    headers,
     body: formData,
     credentials: 'include',
   })

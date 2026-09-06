@@ -10,7 +10,6 @@ import {
   uploadExcel,
   uploadPdf,
 } from '@/lib/api/runs'
-import { buildMockRun } from '@/lib/mock-run'
 
 const POLL_INTERVAL_MS = 1500
 
@@ -41,13 +40,17 @@ export function useRunPipeline() {
       stopPolling()
 
       try {
-        setRun(
-          buildMockRun({
-            status: 'processing',
-            progress: 5,
-            current_step: 'Uploading reference PDF and Excel template...',
-          })
-        )
+        setRun({
+          id: 'temp-upload',
+          status: 'processing',
+          progress: 5,
+          current_step: 'Uploading reference PDF and Excel template...',
+          pdf_filename: pdfFile.name,
+          excel_filename: excelFile.name,
+          model: modelTag || 'Default',
+          decisions: [],
+          created_at: new Date().toISOString(),
+        })
 
         // Upload both files in parallel
         const [pdfRes, excelRes] = await Promise.all([
@@ -93,17 +96,18 @@ export function useRunPipeline() {
         setError(msg)
         console.error('Pipeline start failed:', err)
 
-        // Fallback to local simulated progress if backend is unreachable
-        const fallbackId = crypto.randomUUID()
-        activeRunId.current = fallbackId
-        setRun(
-          buildMockRun({
-            id: fallbackId,
-            status: 'processing',
-            progress: 20,
-            current_step: 'Step 1: Extracting technical specifications from reference PDF',
-          })
-        )
+        setRun({
+          id: 'failed-start',
+          status: 'failed',
+          progress: 0,
+          current_step: `Pipeline failed: ${msg}`,
+          pdf_filename: pdfFile.name,
+          excel_filename: excelFile.name,
+          model: modelTag || 'Default',
+          error_message: msg,
+          decisions: [],
+          created_at: new Date().toISOString(),
+        })
       } finally {
         setLoading(false)
       }

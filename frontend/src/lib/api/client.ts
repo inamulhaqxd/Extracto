@@ -1,12 +1,42 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const REQUEST_TIMEOUT_MS = 15_000
+const TOKEN_KEY = 'tender_access_token'
+
+export function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return localStorage.getItem(TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function setAuthToken(token: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(TOKEN_KEY, token)
+  } catch {
+    // ignore storage write errors
+  }
+}
+
+export function removeAuthToken(): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    // ignore storage remove errors
+  }
+}
 
 export async function apiFetch<T = unknown>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const token = getAuthToken()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers as Record<string, string>),
   }
 

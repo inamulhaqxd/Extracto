@@ -4,9 +4,10 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { login } from '@/lib/api/auth'
+import { setAuthToken } from '@/lib/api/client'
 
 const signInSchema = z.object({
-  email: z.email('Please enter a valid email'),
+  email: z.string().min(1, 'Email or username is required'),
   password: z.string().min(1, 'Password is required'),
 })
 
@@ -14,11 +15,18 @@ type SignInValues = z.infer<typeof signInSchema>
 
 const FRIENDLY_ERRORS: Record<string, string> = {
   'Invalid credentials': 'Email or password is incorrect.',
+  'Invalid email or password': 'Email or password is incorrect.',
+  'Account is deactivated': 'Your account has been deactivated.',
+  'User not found': 'No account found with these credentials.',
   'Too many requests': 'Too many attempts. Please try again later.',
+  'Failed to fetch': 'Unable to connect to the backend server. Please verify the API is running.',
 }
 
 function friendlyError(raw: string): string {
-  return FRIENDLY_ERRORS[raw] || 'Something went wrong. Please try again.'
+  if (FRIENDLY_ERRORS[raw]) {
+    return FRIENDLY_ERRORS[raw]
+  }
+  return raw.trim() ? raw : 'Something went wrong. Please try again.'
 }
 
 export function useSignIn() {
@@ -39,7 +47,12 @@ export function useSignIn() {
     setError(null)
     startTransition(async () => {
       try {
-        await login({ email: values.email, password: values.password })
+        const res = await login({
+          email: values.email,
+          username: values.email,
+          password: values.password,
+        })
+        setAuthToken(res.access_token)
         router.push('/dashboard')
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Login failed'

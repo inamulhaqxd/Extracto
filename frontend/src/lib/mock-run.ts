@@ -41,7 +41,7 @@ export function buildMockRun(overrides: Partial<ProcessingRun> = {}): Processing
     current_step: null,
     pdf_filename: 'reference-spec.pdf',
     excel_filename: 'compliance-template.xlsx',
-    model: 'gpt-4o',
+    model: 'qwen2.5:3b',
     decisions: REQUIREMENTS.map((r) => ({ ...r, status: 'pending' as const })),
     created_at: new Date().toISOString(),
     ...overrides,

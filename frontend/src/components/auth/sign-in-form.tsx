@@ -31,13 +31,13 @@ export function SignInForm({
         control={form.control}
         render={({ field, fieldState }) => (
           <Field data-invalid={fieldState.invalid}>
-            <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+            <FieldLabel htmlFor={field.name}>Email or Username</FieldLabel>
             <InputGroup className="h-12 bg-muted/30 border-muted-foreground/20 transition-colors focus-within:bg-background">
               <InputGroupInput
                 {...field}
                 id={field.name}
-                type="email"
-                placeholder="you@example.com"
+                type="text"
+                placeholder="admin or you@example.com"
                 disabled={loading}
                 aria-invalid={fieldState.invalid}
               />
