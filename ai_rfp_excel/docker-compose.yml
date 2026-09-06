@@ -27,6 +27,8 @@ services:
     restart: unless-stopped
     ports:
       - "${API_PORT:-8000}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - path: .env
         required: false
@@ -49,6 +51,7 @@ services:
       - tender_network
 
   frontend:
+    profiles: ["full"]
     build:
       context: ..
       dockerfile: ai_rfp_excel/Dockerfile.frontend

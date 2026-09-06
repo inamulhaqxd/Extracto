@@ -22,28 +22,28 @@ help:
 	@echo   make migrate-new    - Create new migration (msg="description")
 	@echo   make clean          - Remove Python cache files
 
-# Start both Backend (FastAPI) and Frontend (Next.js)
+# Start Docker Backend (Postgres + FastAPI + Backup) and Native Frontend (Next.js)
 run:
-	@powershell -Command "Start-Process python -ArgumentList '-m uvicorn ai_rfp_excel.app.main:app --host 0.0.0.0 --port 8000 --reload'; Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd frontend; pnpm dev'; Write-Host 'TenderFlow backend (http://localhost:8000) and frontend (http://localhost:3000) launched!'"
+	@powershell -Command "docker compose -f ai_rfp_excel/docker-compose.yml up -d; Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd frontend; pnpm dev'; Write-Host 'TenderFlow Docker backend (http://localhost:8000) and Native frontend (http://localhost:3000) launched!'"
 
 run-all: run
 
 # Individual Server Targets
 run-api:
-	python -m uvicorn ai_rfp_excel.app.main:app --host 0.0.0.0 --port 8000 --reload
+	docker compose -f ai_rfp_excel/docker-compose.yml up -d postgres api
 
 run-frontend:
 	cd frontend && pnpm dev
 
 run-ui: run-frontend
 
-# Stop All Running Project Processes (Ports 8000 & 3000)
+# Stop All Running Project Processes (Docker backend & Port 3000 frontend)
 stop:
-	@powershell -Command "$$conns = Get-NetTCPConnection -LocalPort 8000, 3000 -ErrorAction SilentlyContinue; if ($$conns) { $$conns | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $$_ -Force -ErrorAction SilentlyContinue }; Write-Host 'TenderFlow processes stopped.' } else { Write-Host 'No running TenderFlow processes found.' }"
+	@powershell -Command "docker compose -f ai_rfp_excel/docker-compose.yml down; $$conns = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue; if ($$conns) { $$conns | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $$_ -Force -ErrorAction SilentlyContinue }; Write-Host 'Native frontend stopped.' }; Write-Host 'TenderFlow services stopped.'"
 
 # Seed Admin User
 seed:
-	python -m ai_rfp_excel.scripts.seed_admin
+	docker compose -f ai_rfp_excel/docker-compose.yml exec api python -m ai_rfp_excel.scripts.seed_admin
 
 # Environment & Dependencies
 install:
