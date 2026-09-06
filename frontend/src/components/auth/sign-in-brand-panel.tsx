@@ -27,7 +27,7 @@ export function SignInBrandPanel() {
           </span>
           <span className="flex flex-col leading-tight">
             <span className="text-[15px] font-semibold tracking-tight">
-              TenderFlow
+              Extracto AI
             </span>
             <span className="text-muted-foreground text-xs tracking-tight">
               RFP Automation
@@ -48,7 +48,7 @@ export function SignInBrandPanel() {
           </div>
 
           <h2 className="mt-5 max-w-md text-3xl font-semibold tracking-tight text-balance">
-            Streamline your tender process
+            Streamline your RFP and specification workflows
           </h2>
           <p className="text-muted-foreground mt-3 max-w-md text-sm leading-relaxed text-pretty">
             Upload RFP documents, extract requirements with AI, and generate

@@ -24,7 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip"
 import { PanelLeftIcon } from "lucide-react"
 
-const SIDEBAR_STORAGE_KEY = "tenderflow.sidebar_open"
+const SIDEBAR_STORAGE_KEY = "extracto.sidebar_open"
 const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3.5rem"

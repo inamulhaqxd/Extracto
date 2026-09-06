@@ -9,7 +9,7 @@ export default function AppearanceSettingsPage() {
       <div>
         <h2 className="text-lg font-semibold">Appearance</h2>
         <p className="text-sm text-muted-foreground">
-          Choose how TenderFlow looks on this device.
+          Choose how Extracto AI looks on this device.
         </p>
       </div>
 

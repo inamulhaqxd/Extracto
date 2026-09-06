@@ -15,24 +15,31 @@ from ai_rfp_excel.app.database.models import User
 async def seed() -> None:
     await init_db()
     async with async_session() as session:
-        result = await session.execute(select(User).where((User.email == "admin@tender.local") | (User.username == "admin")))
+        result = await session.execute(
+            select(User).where(
+                (User.email == "admin@extracto.local")
+                | (User.email == "admin@tender.local")
+                | (User.username == "admin")
+            )
+        )
         user = result.scalar_one_or_none()
         hashed = hash_password("admin123")
         if user:
             user.hashed_password = hashed
+            user.email = "admin@extracto.local"
             user.is_admin = True
             user.is_active = True
-            print("Updated existing admin user password to admin123")
+            print("Updated existing admin user (admin / admin@extracto.local / admin123)")
         else:
             admin_user = User(
                 username="admin",
-                email="admin@tender.local",
+                email="admin@extracto.local",
                 hashed_password=hashed,
                 is_admin=True,
                 is_active=True,
             )
             session.add(admin_user)
-            print("Created new admin user (admin / admin@tender.local / admin123)")
+            print("Created new admin user (admin / admin@extracto.local / admin123)")
         await session.commit()
 
 if __name__ == "__main__":

@@ -30,7 +30,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
             <FileText className="size-4 group-data-[collapsible=icon]:size-5" />
           </span>
           <span className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-semibold tracking-tight">TenderFlow</span>
+            <span className="text-sm font-semibold tracking-tight">Extracto AI</span>
             <span className="text-xs text-muted-foreground">RFP Automation</span>
           </span>
         </Link>

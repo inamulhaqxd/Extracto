@@ -72,7 +72,7 @@ export function TenderSchematic() {
       {/* Labels */}
       <g className="fill-muted-foreground font-mono" fontSize="9">
         <text x="260" y="26" textAnchor="middle" letterSpacing="1.5">
-          TENDER DASHBOARD
+          EXTRACTO AI DASHBOARD
         </text>
         <text x="85" y="350" textAnchor="middle" letterSpacing="1.5">
           NAV

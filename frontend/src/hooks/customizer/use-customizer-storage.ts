@@ -9,12 +9,13 @@ export interface CustomizerStorageState {
   sidebar: SidebarLayoutConfig | null
 }
 
-const STORAGE_KEY = 'tenderflow.customizer'
+const STORAGE_KEY = 'extracto.customizer'
+const LEGACY_STORAGE_KEY = 'tenderflow.customizer'
 
 export function loadCustomizerState(): CustomizerStorageState | null {
   if (typeof window === 'undefined') return null
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY)
     return raw ? (JSON.parse(raw) as CustomizerStorageState) : null
   } catch {
     return null

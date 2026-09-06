@@ -5,7 +5,7 @@ from ai_rfp_excel.app.config import Settings
 
 def test_settings_loads_defaults() -> None:
     settings = Settings()
-    assert settings.APP_NAME == "AI RFP Excel Generator"
+    assert settings.APP_NAME == "Extracto AI"
     assert settings.DEBUG is True
     assert settings.POSTGRES_PORT == 5432
 

@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "TenderFlow",
-  description: "AI-based RFP PDF-to-Excel automation",
+  title: "Extracto AI",
+  description: "AI-powered RFP analysis, spec extraction, and compliance matrix automation",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

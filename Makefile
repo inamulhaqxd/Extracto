@@ -24,7 +24,7 @@ help:
 
 # Start Docker Backend (Postgres + FastAPI + Backup) and Native Frontend (Next.js)
 run:
-	@powershell -Command "docker compose -f ai_rfp_excel/docker-compose.yml up -d; Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd frontend; pnpm dev'; Write-Host 'TenderFlow Docker backend (http://localhost:8000) and Native frontend (http://localhost:3000) launched!'"
+	@powershell -Command "docker compose -f ai_rfp_excel/docker-compose.yml up -d; Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd frontend; pnpm dev'; Write-Host 'Extracto AI Docker backend (http://localhost:8000) and Native frontend (http://localhost:3000) launched!'"
 
 run-all: run
 
@@ -39,7 +39,7 @@ run-ui: run-frontend
 
 # Stop All Running Project Processes (Docker backend & Port 3000 frontend)
 stop:
-	@powershell -Command "docker compose -f ai_rfp_excel/docker-compose.yml down; $$conns = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue; if ($$conns) { $$conns | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $$_ -Force -ErrorAction SilentlyContinue }; Write-Host 'Native frontend stopped.' }; Write-Host 'TenderFlow services stopped.'"
+	@powershell -Command "docker compose -f ai_rfp_excel/docker-compose.yml down; $$conns = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue; if ($$conns) { $$conns | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $$_ -Force -ErrorAction SilentlyContinue }; Write-Host 'Native frontend stopped.' }; Write-Host 'Extracto AI services stopped.'"
 
 # Seed Admin User
 seed:
