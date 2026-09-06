@@ -23,7 +23,11 @@ except ModuleNotFoundError:
     except ModuleNotFoundError:
         from step3_indexer import DocumentChunk, tokenize  # type: ignore[no-redef]
 
-OLLAMA_BASE_URL: str = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+OLLAMA_BASE_URL: str = (
+    os.getenv("OLLAMA_BASE_URL")
+    or os.getenv("OLLAMA_HOST")
+    or "http://localhost:11434"
+).rstrip("/")
 DEFAULT_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 
 # Persistent vector cache for zero redundant embedding calls across runs

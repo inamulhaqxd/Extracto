@@ -26,7 +26,11 @@ import httpx
 
 ComplianceState = Literal["COMPLIANT", "PARTIALLY_COMPLIANT", "NON_COMPLIANT", "NOT_FOUND", "AMBIGUOUS"]
 
-OLLAMA_BASE_URL: str = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+OLLAMA_BASE_URL: str = (
+    os.getenv("OLLAMA_BASE_URL")
+    or os.getenv("OLLAMA_HOST")
+    or "http://localhost:11434"
+).rstrip("/")
 DEFAULT_LLM_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
 CONFIDENCE_REVIEW_THRESHOLD: float = 0.70
 DEFAULT_CONFIDENCE: float = 0.85

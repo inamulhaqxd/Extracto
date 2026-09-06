@@ -35,6 +35,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-extracto_user}:${POSTGRES_PASSWORD:-extracto_pass}@postgres:5432/${POSTGRES_DB:-extracto_db}
       OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_HOST: http://host.docker.internal:11434
     volumes:
       - ../ai_rfp_excel:/app/ai_rfp_excel
       - upload_data:/app/data/uploads
