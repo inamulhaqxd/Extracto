@@ -1,5 +1,3 @@
-name: extracto
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -22,7 +20,6 @@ services:
       retries: 5
 
   api:
-    image: extracto_api:latest
     build:
       context: ..
       dockerfile: ai_rfp_excel/Dockerfile
@@ -55,7 +52,6 @@ services:
 
   frontend:
     profiles: ["full"]
-    image: extracto_frontend:latest
     build:
       context: ..
       dockerfile: ai_rfp_excel/Dockerfile.frontend
