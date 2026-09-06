@@ -98,7 +98,10 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
             detail="Email or username is required",
         )
 
-    result = await db.execute(select(User).where((User.email == identifier) | (User.username == identifier)))
+    lookup_identifier = "admin@extracto.local" if identifier == "admin@tender.local" else identifier
+    result = await db.execute(
+        select(User).where((User.email == lookup_identifier) | (User.username == lookup_identifier))
+    )
     user: User | None = result.scalars().first()
 
     if user is None or not verify_password(request.password, user.hashed_password):
