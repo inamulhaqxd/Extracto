@@ -21,6 +21,13 @@ export interface CreateRunPayload {
   model_name?: string | null
 }
 
+export interface BackendSlotAssignment {
+  slot_type?: string
+  cell_coordinate?: string
+  value?: string
+  needs_review?: boolean
+}
+
 export interface BackendDecision {
   requirement_id: string
   requirement_text: string
@@ -33,6 +40,7 @@ export interface BackendDecision {
   evidence?: Array<Record<string, unknown>>
   needs_review?: boolean
   review_notes?: string | null
+  slot_assignments?: Record<string, BackendSlotAssignment>
 }
 
 export interface BackendRunResponse {
@@ -127,6 +135,7 @@ export async function submitRunReview(
     matched_value?: string | null
     confidence?: number | null
     review_notes?: string | null
+    slot_overrides?: Record<string, string> | null
   }>,
 ): Promise<BackendRunResponse> {
   return apiFetch<BackendRunResponse>(`/runs/${runId}/review`, {
@@ -184,11 +193,23 @@ export function transformBackendRun(backend: BackendRunResponse): ProcessingRun 
     decisions: (backend.decisions || []).map((d) => {
       let mappedStatus: DecisionStatus = 'pending'
       const s = (d.status || '').toUpperCase()
-      if (s.includes('COMPLIANT') && !s.includes('NON') && !s.includes('PARTIAL')) {
+      if (s.includes('OVERRIDDEN')) {
+        mappedStatus = 'overridden'
+      } else if (s.includes('COMPLIANT') && !s.includes('NON') && !s.includes('PARTIAL')) {
         mappedStatus = 'approved'
       } else if (s.includes('NON_COMPLIANT')) {
         mappedStatus = 'rejected'
       }
+
+      const slotsList = d.slot_assignments
+        ? Object.entries(d.slot_assignments).map(([key, slot]) => ({
+            key,
+            slot_type: slot.slot_type || key,
+            cell_coordinate: slot.cell_coordinate || '',
+            value: slot.value != null ? String(slot.value) : '',
+            needs_review: Boolean(slot.needs_review),
+          }))
+        : []
 
       return {
         id: d.requirement_id,
@@ -196,7 +217,8 @@ export function transformBackendRun(backend: BackendRunResponse): ProcessingRun 
         extracted_value: d.matched_value || '',
         confidence: d.confidence,
         status: mappedStatus,
-        override_value: undefined,
+        override_value: s.includes('OVERRIDDEN') ? (d.matched_value || undefined) : undefined,
+        slots: slotsList,
       }
     }),
   }

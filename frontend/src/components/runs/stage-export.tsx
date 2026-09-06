@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, Loader2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ChevronLeft, Download, FileSpreadsheet, Loader2 } from 'lucide-react'
 import type { ProcessingRun } from '@/types'
 import { downloadExcelFile } from '@/lib/api/runs'
 import { useDecisionCounts } from '@/hooks/runs/use-decision-counts'
@@ -11,7 +11,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item'
 
-export function StageExport({ run }: { run: ProcessingRun }) {
+export function StageExport({
+  run,
+  onBackToReview,
+}: {
+  run: ProcessingRun
+  onBackToReview?: () => void
+}) {
   const counts = useDecisionCounts(run.decisions)
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
@@ -95,6 +101,15 @@ export function StageExport({ run }: { run: ProcessingRun }) {
           </Item>
         </CardContent>
       </Card>
+
+      {onBackToReview && (
+        <div className="flex justify-start">
+          <Button variant="secondary" size="lg" onPress={onBackToReview}>
+            <ChevronLeft aria-hidden="true" />
+            Back to Review & Approvals
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

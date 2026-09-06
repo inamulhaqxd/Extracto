@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { Check, MoreVertical, Pencil, X } from 'lucide-react'
 import type { DecisionStatus, RequirementDecision } from '@/types'
 import { confidenceColor, confidenceLabel, isLowConfidence } from '@/lib/confidence'
@@ -27,25 +28,75 @@ export function RequirementTableRow({
   onDecide,
 }: {
   decision: RequirementDecision
-  onDecide: (id: string, status: DecisionStatus, overrideValue?: string) => void
+  onDecide: (
+    id: string,
+    status: DecisionStatus,
+    overrideValue?: string,
+    slotOverrides?: Record<string, string>
+  ) => void
 }) {
   const { open, setOpen, draft, setDraft, openDialog, closeDialog } = useRequirementOverride(
     decision.override_value ?? decision.extracted_value
   )
+  const [slotDrafts, setSlotDrafts] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (open && decision.slots && decision.slots.length > 0) {
+      const initial: Record<string, string> = {}
+      for (const slot of decision.slots) {
+        initial[slot.key] = slot.value
+      }
+      setSlotDrafts(initial)
+    }
+  }, [open, decision.slots])
+
   const overrideInputId = `override-${decision.id}`
+  const hasMultipleSlots = Boolean(decision.slots && decision.slots.length > 1)
 
   function saveOverride() {
-    onDecide(decision.id, 'overridden', draft)
+    if (hasMultipleSlots && decision.slots) {
+      const answerSlot =
+        decision.slots.find(
+          (s) => s.slot_type.toLowerCase() === 'answer' || s.key === 'answer'
+        ) ?? decision.slots[0]
+      const primaryVal = slotDrafts[answerSlot.key] ?? answerSlot.value
+      onDecide(decision.id, 'overridden', primaryVal, slotDrafts)
+    } else {
+      onDecide(decision.id, 'overridden', draft)
+    }
     closeDialog()
   }
 
   return (
     <TableRow className={isLowConfidence(decision.confidence) ? 'bg-warning/5' : undefined}>
-      <TableCell className="max-w-xs min-w-0 whitespace-normal">
-        <div className="font-medium">{decision.requirement}</div>
-        <div className="text-muted-foreground">
-          {decision.override_value ?? decision.extracted_value}
-        </div>
+      <TableCell className="max-w-md min-w-0 whitespace-normal">
+        <div className="font-medium text-foreground">{decision.requirement}</div>
+
+        {hasMultipleSlots && decision.slots ? (
+          <div className="mt-2 space-y-1.5">
+            {decision.slots.map((slot) => {
+              const displayVal = slot.value
+              return (
+                <div key={slot.key} className="flex items-baseline gap-2 text-xs">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded font-mono font-medium bg-muted text-muted-foreground text-[11px] shrink-0">
+                    {slot.cell_coordinate ? `${slot.cell_coordinate} (${slot.slot_type})` : slot.slot_type}
+                  </span>
+                  <span className="text-muted-foreground break-words min-w-0">
+                    {displayVal && displayVal !== 'NOT_SPECIFIED' ? (
+                      displayVal
+                    ) : (
+                      <span className="italic text-warning font-mono">NOT_SPECIFIED</span>
+                    )}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="text-muted-foreground text-sm mt-0.5">
+            {decision.override_value ?? decision.extracted_value}
+          </div>
+        )}
       </TableCell>
       <TableCell className="text-center">
         <span className={`font-medium tabular-nums ${confidenceColor(decision.confidence)}`}>
@@ -77,7 +128,7 @@ export function RequirementTableRow({
               )}
               <DropdownMenuItem onAction={openDialog}>
                 <Pencil aria-hidden="true" />
-                Override
+                Override Slots
               </DropdownMenuItem>
             </DropdownMenu>
           </DropdownMenuTrigger>
@@ -85,31 +136,61 @@ export function RequirementTableRow({
 
         <Dialog isOpen={open} onOpenChange={setOpen}>
           <DialogHeader>
-            <DialogTitle>Override Value</DialogTitle>
+            <DialogTitle>Override Column Slots</DialogTitle>
             <DialogDescription>{decision.requirement}</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3">
-            <div>
-              <div className="text-xs text-muted-foreground">Extracted value</div>
-              <div className="text-sm">{decision.extracted_value}</div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor={overrideInputId}>Override value</Label>
-              <Textarea
-                id={overrideInputId}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                rows={3}
-              />
-            </div>
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto py-1">
+            {hasMultipleSlots && decision.slots ? (
+              decision.slots.map((slot) => {
+                const inputId = `slot-${decision.id}-${slot.key}`
+                const label = `${slot.slot_type.toUpperCase()}${
+                  slot.cell_coordinate ? ` (Cell ${slot.cell_coordinate})` : ''
+                }`
+                return (
+                  <div key={slot.key} className="space-y-1.5">
+                    <Label htmlFor={inputId} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {label}
+                    </Label>
+                    <Textarea
+                      id={inputId}
+                      value={slotDrafts[slot.key] ?? slot.value}
+                      onChange={(e) =>
+                        setSlotDrafts((prev) => ({
+                          ...prev,
+                          [slot.key]: e.target.value,
+                        }))
+                      }
+                      rows={slot.slot_type.toLowerCase().includes('remark') ? 3 : 2}
+                      placeholder={`Enter ${slot.slot_type} value...`}
+                    />
+                  </div>
+                )
+              })
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <div className="text-xs text-muted-foreground">Extracted value</div>
+                  <div className="text-sm font-medium">{decision.extracted_value}</div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={overrideInputId}>Override value</Label>
+                  <Textarea
+                    id={overrideInputId}
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
             <Button variant="outline" onPress={closeDialog}>
               Cancel
             </Button>
-            <Button onPress={saveOverride}>Save Override</Button>
+            <Button onPress={saveOverride}>Save Overrides</Button>
           </DialogFooter>
         </Dialog>
       </TableCell>

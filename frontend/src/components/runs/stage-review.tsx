@@ -18,7 +18,12 @@ export function StageReview({
   onContinue,
 }: {
   run: ProcessingRun
-  onDecide: (id: string, status: DecisionStatus, overrideValue?: string) => void
+  onDecide: (
+    id: string,
+    status: DecisionStatus,
+    overrideValue?: string,
+    slotOverrides?: Record<string, string>
+  ) => void
   onBack: () => void
   onContinue: () => void
 }) {

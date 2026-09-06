@@ -123,17 +123,37 @@ export function useRunPipeline() {
   }, [stopPolling])
 
   const decide = useCallback(
-    async (id: string, status: DecisionStatus, overrideValue?: string) => {
+    async (
+      id: string,
+      status: DecisionStatus,
+      overrideValue?: string,
+      slotOverrides?: Record<string, string>
+    ) => {
       // 1. Optimistic local update
       setRun((prev) =>
         prev
           ? {
               ...prev,
-              decisions: prev.decisions.map((d) =>
-                d.id === id
-                  ? { ...d, status, override_value: overrideValue ?? d.override_value }
-                  : d
-              ),
+              decisions: prev.decisions.map((d) => {
+                if (d.id !== id) return d
+                const updatedSlots = d.slots
+                  ? d.slots.map((s) => ({
+                      ...s,
+                      value:
+                        slotOverrides && slotOverrides[s.key] !== undefined
+                          ? slotOverrides[s.key]
+                          : s.value,
+                      needs_review: false,
+                    }))
+                  : d.slots
+                return {
+                  ...d,
+                  status,
+                  override_value: overrideValue ?? d.override_value,
+                  slots: updatedSlots,
+                  slot_overrides: slotOverrides ?? d.slot_overrides,
+                }
+              }),
             }
           : prev
       )
@@ -142,13 +162,24 @@ export function useRunPipeline() {
       const currentRunId = activeRunId.current
       if (currentRunId) {
         try {
-          await submitRunReview(currentRunId, [
+          const backendStatus =
+            status === 'overridden'
+              ? 'OVERRIDDEN'
+              : status === 'rejected'
+              ? 'NON_COMPLIANT'
+              : 'COMPLIANT'
+          const res = await submitRunReview(currentRunId, [
             {
               requirement_id: id,
-              status: status === 'approved' ? 'COMPLIANT' : 'NON_COMPLIANT',
+              status: backendStatus,
               matched_value: overrideValue,
+              slot_overrides: slotOverrides,
+              confidence: 1.0,
             },
           ])
+          if (res) {
+            setRun(transformBackendRun(res))
+          }
         } catch (err: unknown) {
           console.warn('Failed to persist review override to backend:', err)
         }

@@ -30,6 +30,14 @@ export type RunStatus = 'pending' | 'processing' | 'completed' | 'cancelled' | '
 
 export type DecisionStatus = 'pending' | 'approved' | 'rejected' | 'overridden'
 
+export interface SlotAssignment {
+  key: string
+  slot_type: string
+  cell_coordinate: string
+  value: string
+  needs_review: boolean
+}
+
 export interface RequirementDecision {
   id: string
   requirement: string
@@ -37,6 +45,8 @@ export interface RequirementDecision {
   confidence: number
   status: DecisionStatus
   override_value?: string
+  slots?: SlotAssignment[]
+  slot_overrides?: Record<string, string>
 }
 
 export interface ProcessingRun {

@@ -43,6 +43,7 @@ class ReviewItem(BaseModel):
     matched_value: str | None = None
     confidence: float | None = None
     review_notes: str | None = None
+    slot_overrides: dict[str, str] | None = None
 
 
 class SubmitReviewRequest(BaseModel):
@@ -69,6 +70,7 @@ class RunDecisionResponse(BaseModel):
     evidence: list[dict[str, object]] = Field(default_factory=list)
     needs_review: bool = False
     review_notes: str | None = None
+    slot_assignments: dict[str, dict[str, object]] = Field(default_factory=dict)
 
 
 class RunResponse(BaseModel):
@@ -360,6 +362,13 @@ async def get_run_status(
                 "location": str(d.get("sheet_name") or ""),
             })
 
+        raw_slots = d.get("slot_assignments")
+        clean_slots: dict[str, dict[str, object]] = {}
+        if isinstance(raw_slots, dict):
+            for sk, sv in raw_slots.items():
+                if isinstance(sv, dict):
+                    clean_slots[str(sk)] = {str(k): v for k, v in sv.items()}
+
         decisions_list.append(
             RunDecisionResponse(
                 requirement_id=str(d.get("requirement_id") or "REQ"),
@@ -373,6 +382,7 @@ async def get_run_status(
                 evidence=ev_list,
                 needs_review=bool(d.get("needs_review") or conf < 0.70 or "AMBIGUOUS" in state_val),
                 review_notes=str(d.get("review_notes")) if d.get("review_notes") else None,
+                slot_assignments=clean_slots,
             )
         )
 
@@ -443,6 +453,16 @@ async def submit_run_review(
 
     meta = run.metadata_json or {}
     decisions_raw = meta.get("decisions")
+    if not isinstance(decisions_raw, list) or len(decisions_raw) == 0:
+        decisions_json_path = Path(settings.GENERATED_DIR) / str(run_id) / "compliance_decisions.json"
+        if decisions_json_path.exists():
+            try:
+                with open(decisions_json_path, "r", encoding="utf-8") as f:
+                    disk_data = json.load(f)
+                    decisions_raw = disk_data.get("items") or disk_data.get("decisions") or []
+            except Exception:
+                pass
+
     reviews_by_req = {r.requirement_id: r for r in review_req.reviews}
 
     # Apply overrides
@@ -456,18 +476,84 @@ async def submit_run_review(
 
             if req_id in reviews_by_req:
                 rev = reviews_by_req[req_id]
-                item["compliance_state"] = rev.status.upper()
-                item["status"] = rev.status.upper()
+                status_upper = rev.status.upper()
+                item["status"] = status_upper
+                item["compliance_state"] = "COMPLIANT" if status_upper in ("COMPLIANT", "OVERRIDDEN") else status_upper
+
                 if rev.matched_value is not None:
                     item["extracted_value"] = rev.matched_value
                     item["matched_value"] = rev.matched_value
                 if rev.confidence is not None:
                     item["confidence"] = rev.confidence
+                else:
+                    item["confidence"] = 1.0
+
                 if rev.review_notes:
                     item["review_notes"] = rev.review_notes
-                    reason_base = str(item.get("reasoning") or "")
+                    reason_base = str(item.get("reasoning") or item.get("remarks") or "")
                     item["reasoning"] = f"{reason_base} [Reviewer Note: {rev.review_notes}]"
                 item["needs_review"] = False
+
+                # Propagate override to slot_assignments for Step 5 Excel population
+                slots_raw = item.get("slot_assignments")
+                if isinstance(slots_raw, dict):
+                    updated_slots: dict[str, dict[str, object]] = {}
+                    for k, v in slots_raw.items():
+                        if isinstance(v, dict):
+                            updated_slots[k] = {str(sk): sv for sk, sv in v.items()}
+
+                    # 1. Apply slot-level overrides if specified by user
+                    if rev.slot_overrides:
+                        for s_key, s_val in rev.slot_overrides.items():
+                            if s_key in updated_slots:
+                                updated_slots[s_key]["value"] = s_val
+                                updated_slots[s_key]["needs_review"] = False
+                            else:
+                                for uk, uv in updated_slots.items():
+                                    if uk.lower() == s_key.lower() or str(uv.get("slot_type", "")).lower() == s_key.lower():
+                                        uv["value"] = s_val
+                                        uv["needs_review"] = False
+                                        break
+
+                    # 2. Update primary answer/value slot if matched_value is provided
+                    if rev.matched_value is not None:
+                        # Find primary answer/value slot
+                        target_key: str | None = None
+                        if "answer" in updated_slots:
+                            target_key = "answer"
+                        else:
+                            for sk, s_dict in updated_slots.items():
+                                st = str(s_dict.get("slot_type", "")).lower()
+                                if st in ("answer", "value", "specification", "offered", "response"):
+                                    target_key = sk
+                                    break
+                        if target_key is None:
+                            for sk, s_dict in updated_slots.items():
+                                st = str(s_dict.get("slot_type", sk)).lower()
+                                if not any(ign in st for ign in ("remark", "note", "comment", "citation", "reference", "status", "compliance")):
+                                    target_key = sk
+                                    break
+                        if target_key is None and len(updated_slots) > 0:
+                            target_key = next(iter(updated_slots.keys()))
+
+                        if target_key and target_key in updated_slots:
+                            if not rev.slot_overrides or target_key not in rev.slot_overrides:
+                                updated_slots[target_key]["value"] = rev.matched_value
+                                updated_slots[target_key]["needs_review"] = False
+
+                    if rev.review_notes:
+                        for s_dict in updated_slots.values():
+                            st = str(s_dict.get("slot_type", "")).lower()
+                            if any(rk in st for rk in ("remark", "note", "comment")):
+                                prev_rem = str(s_dict.get("value") or "")
+                                s_dict["value"] = f"{prev_rem} [Review: {rev.review_notes}]" if prev_rem and prev_rem != "None" else rev.review_notes
+                                s_dict["needs_review"] = False
+
+                    # Mark all slots for this reviewed item as not needing review
+                    for s_dict in updated_slots.values():
+                        s_dict["needs_review"] = False
+
+                    item["slot_assignments"] = updated_slots
 
             updated_decisions.append(item)
 
@@ -475,21 +561,31 @@ async def submit_run_review(
     if run.workbook_id:
         wb_res = await db.execute(select(Workbook).where(Workbook.id == run.workbook_id))
         wb_rec = wb_res.scalar_one_or_none()
+        if not wb_rec and meta.get("workbook_filename"):
+            wb_res = await db.execute(select(Workbook).where(Workbook.filename == str(meta.get("workbook_filename"))))
+            wb_rec = wb_res.scalar_one_or_none()
+
         if wb_rec:
             wb_path = Path(settings.UPLOAD_DIR) / wb_rec.filename
-            output_dir = Path(settings.GENERATED_DIR) / str(run_id)
-            output_dir.mkdir(parents=True, exist_ok=True)
-            decisions_json_path = output_dir / "compliance_decisions.json"
-            with open(decisions_json_path, "w", encoding="utf-8") as f:
-                json.dump({"items": updated_decisions, "decisions": updated_decisions}, f, indent=2, ensure_ascii=False)
-            out_excel_path = output_dir / f"{wb_path.stem}_populated.xlsx"
-            manifest_json_path = output_dir / "population_manifest.json"
-            populate_excel(wb_path, decisions_json_path, out_excel_path, manifest_json_path)
-            meta["generated_file"] = out_excel_path.name
-            meta["generated_file_path"] = str(out_excel_path)
+            if not wb_path.exists():
+                wb_path = Path(settings.UPLOAD_DIR) / f"{run.workbook_id}.xlsx"
+
+            if wb_path.exists():
+                output_dir = Path(settings.GENERATED_DIR) / str(run_id)
+                output_dir.mkdir(parents=True, exist_ok=True)
+                decisions_json_path = output_dir / "compliance_decisions.json"
+                with open(decisions_json_path, "w", encoding="utf-8") as f:
+                    json.dump({"items": updated_decisions, "decisions": updated_decisions}, f, indent=2, ensure_ascii=False)
+                out_excel_path = output_dir / f"{wb_path.stem}_populated.xlsx"
+                manifest_json_path = output_dir / "population_manifest.json"
+                populate_excel(wb_path, decisions_json_path, out_excel_path, manifest_json_path)
+                meta["generated_file"] = out_excel_path.name
+                meta["generated_file_path"] = str(out_excel_path)
 
     meta["decisions"] = updated_decisions
-    run.metadata_json = meta
+    run.metadata_json = dict(meta)
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(run, "metadata_json")
     await db.commit()
 
     return await get_run_status(run_id, current_user, db)

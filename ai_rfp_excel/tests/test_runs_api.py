@@ -66,8 +66,10 @@ def test_submit_review_request() -> None:
                 status="COMPLIANT",
                 confidence=1.0,
                 review_notes="Approved per customer addendum",
+                slot_overrides={"answer": "400V 50Hz", "remarks": "Confirmed with vendor"},
             )
         ]
     )
     assert len(review_req.reviews) == 1
     assert review_req.reviews[0].status == "COMPLIANT"
+    assert review_req.reviews[0].slot_overrides == {"answer": "400V 50Hz", "remarks": "Confirmed with vendor"}
