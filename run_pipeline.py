@@ -4,7 +4,7 @@
 Executes the PRD-compliant 5-step pipeline:
 1. PDF text & table extraction + OCR fallback
 2. Dynamic Excel workbook analysis & slot classification
-3. Hybrid BM25 & local embedding evidence retrieval
+3. Local vector embedding evidence retrieval
 4. Layered compliance resolution & spec extraction (100% offline)
 5. In-place Excel population with formula preservation & Rule 7 yellow audit highlight
 """

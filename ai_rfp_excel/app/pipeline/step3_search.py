@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Step 3 Search: Simple Hybrid Retrieval (Exact Codes + Local AI Embeddings).
-Combines keyword/code precision with semantic similarity via local Ollama.
+Step 3 Search: Vector Evidence Retrieval (Local AI Embeddings + Technical Code Anchoring).
+Retrieves candidate chunks via local Ollama vector embeddings with strict cosine similarity.
 Strict typing only — zero Any (Rule 4). 100% offline (Rule 10).
 """
 
@@ -212,43 +212,33 @@ def simple_hybrid_search(
 
     scored_candidates: list[tuple[float, DocumentChunk, list[str]]] = []
     for chunk in chunks:
-        # 1. Exact technical code matches (using word boundaries to eliminate false substring hits)
+        # Technical code matches (using word boundaries to eliminate false substring hits)
         chunk_hits = [c for c in query_codes if matches_code(c, chunk["content"])]
         for h in chunk_hits:
             all_exact_hits.add(h)
 
-        # 2. Token overlap score
-        token_overlap = sum(1 for t in query_tokens if t in chunk["tokens"])
-
-        # Keyword component: weighted exact codes + general query token overlap
-        keyword_score = (len(chunk_hits) * 3.0) + (token_overlap * 1.0)
-
-        # 3. Semantic similarity via local embeddings
+        # Semantic similarity via local embeddings (Vector Search)
         semantic_score = 0.0
         if query_embedding is not None:
             chunk_emb = get_local_embedding(chunk["content"])
             if chunk_emb is not None:
                 semantic_score = cosine_similarity(query_embedding, chunk_emb)
 
-        # Combined hybrid score (0 to 1.0 normalized range)
-        if query_embedding is not None and keyword_score > 0:
-            hybrid_score = (0.5 * min(1.0, keyword_score / max(1.0, len(query_tokens)))) + (0.5 * semantic_score)
-        elif query_embedding is not None:
-            # Pure semantic match without keywords - requires high similarity to satisfy Rule 7 Zero-Hallucination
-            if semantic_score >= 0.70:
-                hybrid_score = semantic_score * 0.7
-            else:
-                hybrid_score = 0.0
+        # Vector embedding score (0 to 1.0 range)
+        if query_embedding is not None:
+            final_score = semantic_score
+        elif chunk_hits:
+            # Fallback when embeddings are disabled: match exact technical codes
+            final_score = 0.80
         else:
-            hybrid_score = min(1.0, keyword_score / max(1.0, len(query_tokens)))
+            final_score = 0.0
 
         # Anti-hallucination threshold (Rule 7 Zero-Hallucination):
-        # Must have at least one exact technical code, strong token overlap, or high-confidence semantic similarity.
-        has_anchor = len(chunk_hits) > 0 or token_overlap > 0
-        if (has_anchor and (len(chunk_hits) > 0 or hybrid_score >= 0.20 or keyword_score >= 2.0)) or hybrid_score >= 0.49:
-            scored_candidates.append((hybrid_score, chunk, chunk_hits))
+        # Must meet minimum vector similarity (>= 0.35) or have exact technical code hits
+        if (final_score >= 0.35) or (len(chunk_hits) > 0 and final_score > 0.0) or (not use_embeddings and len(chunk_hits) > 0):
+            scored_candidates.append((final_score, chunk, chunk_hits))
 
-    # Sort descending by hybrid score
+    # Sort descending by vector similarity score
     scored_candidates.sort(key=lambda x: x[0], reverse=True)
 
     # Pick top_k non-redundant chunks

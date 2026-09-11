@@ -21,7 +21,6 @@ class Settings(BaseSettings):
 
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_TEXT_MODEL: str = "qwen2.5:3b"
-    OLLAMA_VISION_MODEL: str = "llava"
     OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
     DEFAULT_LLM_MODEL: str = "qwen2.5:3b"
     LLM_TEMPERATURE: float = 0.1

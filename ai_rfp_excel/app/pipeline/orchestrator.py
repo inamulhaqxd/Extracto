@@ -113,7 +113,7 @@ class PipelineOrchestrator:
 
         total_reqs = wb_analysis.get("total_requirements", 0)
 
-        # Step 3: Evidence Retrieval (Hybrid Search)
+        # Step 3: Evidence Retrieval (Vector Search)
         await self._report_progress(50.0, f"Step 3: Matching evidence for {total_reqs} requirement(s)")
         evidence_json_path = p_out_dir / "candidate_evidence.json"
         await loop.run_in_executor(
