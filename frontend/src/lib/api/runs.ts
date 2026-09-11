@@ -172,11 +172,21 @@ export async function downloadExcelFile(filename: string, runId?: string): Promi
     throw new Error(error.detail || error.message || `Download failed (HTTP ${res.status})`)
   }
 
+  // Attempt to parse server-specified Content-Disposition filename
+  let downloadFilename = filename
+  const disposition = res.headers.get('Content-Disposition')
+  if (disposition && disposition.includes('filename=')) {
+    const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+    if (match && match[1]) {
+      downloadFilename = match[1].replace(/['"]/g, '').trim()
+    }
+  }
+
   const blob = await res.blob()
   const blobUrl = window.URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = blobUrl
-  a.download = filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`
+  a.download = downloadFilename.endsWith('.xlsx') ? downloadFilename : `${downloadFilename}.xlsx`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
@@ -184,13 +194,24 @@ export async function downloadExcelFile(filename: string, runId?: string): Promi
 }
 
 export function transformBackendRun(backend: BackendRunResponse): ProcessingRun {
+  const friendlyExcelName = (() => {
+    if (backend.generated_file && !/^[0-9a-fA-F-]{36}_populated\.xlsx$/.test(backend.generated_file)) {
+      return backend.generated_file
+    }
+    if (backend.workbook_filename) {
+      const stem = backend.workbook_filename.replace(/\.xlsx$/i, '').replace(/_populated$/i, '')
+      return `${stem}_populated.xlsx`
+    }
+    return backend.generated_file || 'output_populated.xlsx'
+  })()
+
   return {
     id: backend.run_id,
     status: backend.status,
     progress: backend.progress,
     current_step: backend.current_step,
     pdf_filename: backend.pdf_filename || 'reference.pdf',
-    excel_filename: backend.generated_file || backend.workbook_filename || 'output.xlsx',
+    excel_filename: friendlyExcelName,
     model: backend.model_used || 'Default',
     error_message: backend.error_message || undefined,
     created_at: backend.started_at || new Date().toISOString(),

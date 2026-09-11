@@ -101,7 +101,7 @@ class InstructorResolution(BaseModel):
         description="Short factual answer, or brief answer to each clause for compound questions, or 'NOT_SPECIFIED' if absent from evidence."
     )
     compliance_state: ComplianceState = Field(
-        default="NOT_FOUND",
+        default=cast(ComplianceState, "NOT_FOUND"),
         description="Compliance determination strictly based on evidence: COMPLIANT, NON_COMPLIANT, PARTIALLY_COMPLIANT, NOT_FOUND, or AMBIGUOUS."
     )
     remarks: str = Field(
@@ -159,60 +159,61 @@ class Step4Output(TypedDict):
 
 
 SYSTEM_PROMPT: str = """You are a strict, factual AI technical compliance analyst evaluating RFP tender specifications.
-Your job is to answer the question using ONLY the provided candidate evidence from the technical document.
+Your job is to answer requirements and evaluate technical compliance using ONLY the provided candidate evidence from the technical document.
 
-CRITICAL RULES (Follow in strict priority order):
+CRITICAL EVALUATION RULES (Strict priority order):
 
 0. ZERO HALLUCINATION (HIGHEST PRIORITY - OVERRIDES ALL OTHER RULES):
-   - If the technical evidence does NOT contain the exact answer, number, or data asked for (e.g. financial cost, unmentioned metrics), you MUST output:
-     "extracted_value": "NOT_SPECIFIED"
-     "citation": "None"
-     "compliance_state": "NOT_FOUND"
-   - NEVER grab unrelated numbers (like minutes, percentages, or dates) to fill missing data. If it is not in the text, it is NOT_SPECIFIED.
+   - If the candidate evidence does NOT explicitly state the requested specification, metric, or answer, you MUST output:
+       "extracted_value": "NOT_SPECIFIED"
+       "compliance_state": "NOT_FOUND"
+       "citation": "None"
+       "confidence": 0.0
+   - NEVER guess, invent, or extrapolate missing specifications from unrelated numbers, dates, or metrics.
 
-1. Match Answer Length to Question Type:
-   - Simple Single-Fact Questions (asking for a single number, name, metric, team, or yes/no):
-     Keep extracted_value SHORT: just the exact fact in 1-5 words. Put any reasoning or context into "remarks".
-     Examples: "40%", "monitoring team", "Third-party fiber cut".
-   - Thresholds & Qualification Rules (e.g. asking 'what size', 'how many calls', 'minimum', 'qualifies'):
-     You MUST retain comparative operators and prepositions ('over', 'more than', 'under', 'at least', 'maximum'). NEVER strip operators or extract a bare number if the condition is an inequality (e.g. return "over 50 pages", not "50 pages"; return "more than 5 calls per week", not "5").
-   - Boundaries vs Interval Spans (e.g. questions asking when something 'ends', 'starts', 'begins', or 'expires'):
-     Extract ONLY the requested single boundary time or limit. Do not return the entire interval (e.g. if access is 'between 7 AM and 9 PM' and question asks when it ends, answer "9 PM", not "7 AM to 9 PM").
-   - Compound & Multi-Part Questions (questions with multiple parts, e.g. with 'and', 'why', 'what was paused', or 'compare'):
-     You MUST answer ALL parts of the question in extracted_value, using one brief phrase per part separated by a semicolon or comma. Never omit any part!
-     * Table row multi-attribute questions: When a question asks for multiple properties answered by a table row (e.g. refresh cycle AND request method), extract all requested values separated by a semicolon (e.g. "5 years; Facilities Request Form"). Never stop after the first column.
-     * Negative fact verifications:
-       - If the document confirms no customer impact: answer "No customer-facing impact; transport redundancy worked as designed". Never output "No..." or ellipses.
-       - If the document says an incident had not happened before: answer "No, it had not happened before; transport connectivity had not failed previously". Never say "Yes".
-     * For "Why" questions: read the snippet and answer with the exact causal explanation for THAT specific question:
-       - For "Why did DC-South have no local fallback?": state that deployment was deprioritized during original rollout and never completed.
-       - For "Why did it take until 14:09 for platform team to be engaged?": state that application and transport monitoring were on separate alerting systems with no cross-linking.
-     * For "How long was X and what was paused?": state the duration, then state what was paused (e.g. "3 minutes; cross-site replication paused").
-     * For "Compare site A vs site B": state the finding for site A, and the finding for site B (e.g. "DC-South had design gap; DC-North had transient failover delay").
-   - For duration questions ("Calculate the total customer-facing impact duration"): provide the exact calculated duration only (e.g. "37 minutes (from 14:04 to 14:41)"). Put the calculation steps in 'remarks'.
+1. FACT EXTRACTION PRECISION:
+   - Single-Fact / Metric Queries: Keep "extracted_value" concise (1-5 words). Put detailed reasoning, calculations, or context into "remarks".
+     Examples: "64 GB DDR5", "Tier III", "99.982%", "24/7 Support", "Third-party fiber cut".
+   - Thresholds & Inequalities: You MUST preserve comparative operators and prepositions ('at least', 'minimum', 'maximum', 'over', 'under', '>=', '<='). Never strip the operator.
+     Examples: Return "over 50 pages", not "50 pages"; return "at least 10 Gbps", not "10 Gbps".
+   - Boundary Limits: When asked for a boundary ('when does it end', 'minimum starting capacity'), extract ONLY that specific boundary value, not the entire interval span.
+     Example: If access is 'between 7 AM and 9 PM' and question asks when it ends, answer "9 PM".
+   - Multi-Part / Compound Requirements: Answer ALL clauses in "extracted_value", separating each answer with a semicolon (";"). Never omit any requested part.
+     Examples: "5 years; Facilities Request Form", "3 minutes; cross-site replication paused".
+   - Negative Statements & Verifications: If the document explicitly negates or confirms an absence (e.g. no impact, not previously failed), answer with a clear factual statement. Never output vague ellipsis ("No...").
+     Example: "No customer-facing impact; transport redundancy worked as designed".
+   - Causal & Explanatory Queries: State the concise factual root cause or justification directly stated in the evidence.
 
-2. Accurate Entity & Action Attribution:
-   - Carefully verify which entity or team is responsible for which specific action. When a list has multiple actions (e.g. Action 1 vs Action 2), attribute the exact team assigned to that specific action. Do not confuse adjacent items.
-   - Verify negative statements: if the document says 'None (internal failover only)' or 'had not previously failed', answer with a clear factual "No" and never say "Yes".
+2. COMPLIANCE DETERMINATION:
+   - COMPLIANT: The evidence explicitly satisfies all criteria of the requirement or answers the factual query.
+   - NON_COMPLIANT: The evidence explicitly conflicts with, falls short of, or violates the requirement.
+   - PARTIALLY_COMPLIANT: Some criteria are met, but one or more conditions are unfulfilled.
+   - NOT_FOUND: The requested specification is absent from the evidence.
+   - AMBIGUOUS: The evidence is contradictory, conflicting across sections, or inconclusive.
 
-3. Determine compliance_state as:
-   - COMPLIANT: The evidence confirms the requirement or answers the factual query.
-   - NON_COMPLIANT: The evidence explicitly conflicts with or fails the requirement.
-   - PARTIALLY_COMPLIANT: Only some conditions are met.
-   - NOT_FOUND: The specification or answer is absent from the evidence.
-   - AMBIGUOUS: Conflicting or unclear evidence.
+3. CITATION:
+   - Copy strictly from the snippet Location header (e.g., "Page X, Section Y" or "Page X, Table Z").
+   - If extracted_value is "NOT_SPECIFIED", citation MUST be "None".
 
-4. Citation: Copy strictly from the snippet Location header. If extracted_value is "NOT_SPECIFIED", citation must be "None".
+4. TARGET COLUMN ADAPTATION:
+   - When Target Excel Columns are provided, inspect each column header for expected format, options, or instructions:
+     * If a column asks for (Yes/No), (Y/N), or Yes/No: write "Yes" (or "Y") when compliant, "No" (or "N") when non-compliant, "Partial" when partially compliant, and "NOT_SPECIFIED" when absent. NEVER write "COMPLIANT" in a Yes/No column.
+     * If a column asks for (Compliant/Non-Compliant) or (Complies/Does Not Comply): write "Compliant" / "Non-Compliant" or "Complies" / "Does Not Comply".
+     * If a column asks for Offered Spec, Bidder Response, or Value: write the concise technical specification.
+     * If a column asks for Remarks, Comments, or Explanation: write the justification.
+     * If a column asks for Citation, Document Reference, or Page: write the location.
+   - Populate the "columns" dictionary with exact column names from Target Excel Columns and their formatted values.
 
-5. You MUST respond with ONLY valid JSON adhering strictly to this schema:
+5. STRICT OUTPUT SCHEMA:
+   - Respond ONLY with a single valid JSON object adhering strictly to this schema:
 {
-  "extracted_value": "short factual answer, or brief answer to each clause for compound questions, or NOT_SPECIFIED",
+  "extracted_value": "short factual answer, brief semicolon-separated answers for compound queries, or NOT_SPECIFIED",
   "compliance_state": "COMPLIANT" | "NON_COMPLIANT" | "PARTIALLY_COMPLIANT" | "NOT_FOUND" | "AMBIGUOUS",
-  "remarks": "step-by-step calculation or concise explanation",
+  "remarks": "concise factual explanation or calculation steps",
   "citation": "Page X, Section Y / Table Z (or None if NOT_SPECIFIED)",
   "confidence": 0.95,
   "columns": {
-    "<Column Name>": "value appropriate for this column"
+    "<Column Name>": "value appropriate for this column matching header format"
   }
 }"""
 
@@ -435,6 +436,8 @@ def build_prompt(
     prompt_parts: list[str] = [f"Requirement / Question: {requirement_text}"]
     if section:
         prompt_parts.append(f"Section Context: {section}")
+    if target_columns:
+        prompt_parts.append(f"Target Excel Columns: {', '.join(target_columns)}")
 
     # Check for domain-specific math assistance
     math_notes = compute_domain_math_notes(requirement_text, candidate_snippets)
@@ -626,12 +629,12 @@ def call_instructor_ollama(
         with _PROMPT_CACHE_LOCK:
             PROMPT_CACHE[cache_key] = json.dumps(res_dict)
 
-        extracted_val = str(response.extracted_value).strip()
+        extracted_val = response.extracted_value.strip()
         if extracted_val.upper() in ("", "NONE", "NULL", "N/A", "NOT_SPECIFIED", "NOT SPECIFIED", "UNKNOWN"):
             extracted_val = "NOT_SPECIFIED"
 
         state = response.compliance_state
-        citation = str(response.citation).strip()
+        citation = response.citation.strip()
         if extracted_val == "NOT_SPECIFIED" or state == "NOT_FOUND":
             extracted_val = "NOT_SPECIFIED"
             state = "NOT_FOUND"
@@ -640,9 +643,9 @@ def call_instructor_ollama(
         return {
             "extracted_value": extracted_val,
             "compliance_state": state,
-            "remarks": str(response.remarks).strip(),
+            "remarks": response.remarks.strip(),
             "citation": citation,
-            "confidence": max(0.0, min(1.0, float(response.confidence))),
+            "confidence": max(0.0, min(1.0, response.confidence)),
             "columns": response.columns,
         }
     except Exception as err:
@@ -672,14 +675,66 @@ def format_for_column(
     compliance_state: str,
     remarks: str,
 ) -> str:
-    """Route LLM's raw output to the appropriate Excel column based on detected column name."""
-    name = column_name.lower()
+    """Route and format output to the appropriate Excel column based on header text and expected format."""
+    name = column_name.lower().strip()
+
+    # Citation / Reference columns
     if any(k in name for k in ["citation", "source", "location", "reference", "page"]):
         return citation if citation else "None"
-    if any(k in name for k in ["compliance", "status"]):
-        return compliance_state
-    if any(k in name for k in ["remark", "comment", "note", "explanation"]):
+
+    # Remarks / Comments columns
+    if any(k in name for k in ["remark", "comment", "note", "explanation", "justification", "deviation"]):
         return remarks
+
+    # Compliance / Status / Verdict columns
+    if any(k in name for k in [
+        "compliance", "compliant", "complies", "comply", "complied",
+        "status", "verdict", "conformity", "meet", "y/n", "c/nc", "yes/no", "yes / no"
+    ]):
+        # Check if the column explicitly specifies (Yes/No), (Y/N), or Yes or No format
+        is_yn = any(yn in name for yn in ["yes/no", "yes / no", "(yes/no)", "(y/n)", "y/n", "yes or no"])
+        is_y_or_n_only = "(y/n)" in name or name.endswith("y/n") or " y/n" in name
+
+        if is_yn:
+            if compliance_state == "COMPLIANT":
+                return "Y" if is_y_or_n_only else "Yes"
+            elif compliance_state == "NON_COMPLIANT":
+                return "N" if is_y_or_n_only else "No"
+            elif compliance_state == "PARTIALLY_COMPLIANT":
+                return "Partial"
+            elif compliance_state == "NOT_FOUND":
+                return "NOT_SPECIFIED"
+            else:
+                return "AMBIGUOUS"
+
+        # Check if Complies / Does Not Comply requested
+        if "complies" in name or "does not comply" in name:
+            if compliance_state == "COMPLIANT":
+                return "Complies"
+            elif compliance_state == "NON_COMPLIANT":
+                return "Does Not Comply"
+            elif compliance_state == "PARTIALLY_COMPLIANT":
+                return "Partially Complies"
+            elif compliance_state == "NOT_FOUND":
+                return "NOT_SPECIFIED"
+            else:
+                return "AMBIGUOUS"
+
+        # Check if Compliant / Non-Compliant title case requested
+        if any(term in name for term in ["compliant/non-compliant", "compliant / non-compliant", "(compliant/non-compliant)", "c/nc"]):
+            if compliance_state == "COMPLIANT":
+                return "Compliant"
+            elif compliance_state == "NON_COMPLIANT":
+                return "Non-Compliant"
+            elif compliance_state == "PARTIALLY_COMPLIANT":
+                return "Partially Compliant"
+            elif compliance_state == "NOT_FOUND":
+                return "NOT_SPECIFIED"
+            else:
+                return "AMBIGUOUS"
+
+        return compliance_state
+
     return extracted_value  # answer/value columns
 
 
@@ -716,13 +771,27 @@ def map_slots(
                     matched_val = col_v
                     break
 
-        val_to_write = matched_val if matched_val is not None else format_for_column(
-            column_name=column_identifier,
-            extracted_value=resolution["extracted_value"],
-            citation=resolution["citation"],
-            compliance_state=resolution["compliance_state"],
-            remarks=resolution["remarks"],
-        )
+        if matched_val is not None:
+            # If the LLM returned a raw compliance state like "COMPLIANT" into a Yes/No column, adapt it to the column's expected format
+            upper_matched = matched_val.strip().upper()
+            if upper_matched in ("COMPLIANT", "NON_COMPLIANT", "PARTIALLY_COMPLIANT", "NOT_FOUND", "AMBIGUOUS"):
+                val_to_write = format_for_column(
+                    column_name=column_identifier,
+                    extracted_value=resolution["extracted_value"],
+                    citation=resolution["citation"],
+                    compliance_state=upper_matched,
+                    remarks=resolution["remarks"],
+                )
+            else:
+                val_to_write = matched_val
+        else:
+            val_to_write = format_for_column(
+                column_name=column_identifier,
+                extracted_value=resolution["extracted_value"],
+                citation=resolution["citation"],
+                compliance_state=resolution["compliance_state"],
+                remarks=resolution["remarks"],
+            )
 
         # Rule 7 Zero-Hallucination: For missing items, ensure answer slot receives NOT_SPECIFIED and citation receives None
         if resolution["extracted_value"] == "NOT_SPECIFIED" or resolution["compliance_state"] == "NOT_FOUND":

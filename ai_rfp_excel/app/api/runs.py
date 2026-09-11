@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import shutil
 import uuid
 from datetime import datetime
@@ -40,6 +41,18 @@ class DeleteAllRunsResponse(BaseModel):
     model_config = {"protected_namespaces": ()}
     message: str
     deleted_count: int
+
+
+def format_populated_filename(original_filename: str | None, default_stem: str = "workbook") -> str:
+    """Format human-readable output Excel filename as <input_stem>_populated.xlsx."""
+    if not original_filename:
+        return f"{default_stem}_populated.xlsx"
+    stem = Path(original_filename).stem
+    if stem.endswith("_populated"):
+        stem = stem[:-10]
+    sanitized = re.sub(r"[^\w\-.]", "_", stem).strip("._")
+    clean = sanitized if sanitized else default_stem
+    return f"{clean}_populated.xlsx"
 
 
 class CreateRunRequest(BaseModel):
@@ -206,7 +219,9 @@ async def execute_pipeline_background(
 
             output_dir = Path(settings.GENERATED_DIR) / str(run_id)
             output_dir.mkdir(parents=True, exist_ok=True)
-            out_excel_path = output_dir / f"{wb_path.stem}_populated.xlsx"
+            orig_name = wb_record.original_filename or wb_path.name
+            out_filename = format_populated_filename(orig_name)
+            out_excel_path = output_dir / out_filename
 
             async def on_progress(progress: float, message: str) -> None:
                 chk = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_id))
@@ -694,7 +709,14 @@ async def get_run_status(
         model_used=run.model_used,
         pdf_filename=str(meta["pdf_filename"]) if meta.get("pdf_filename") else None,
         workbook_filename=str(meta["workbook_filename"]) if meta.get("workbook_filename") else None,
-        generated_file=str(meta["generated_file"]) if meta.get("generated_file") else None,
+        generated_file=(
+            format_populated_filename(str(meta["workbook_filename"]))
+            if meta.get("workbook_filename") and (
+                not meta.get("generated_file")
+                or re.match(r"^[0-9a-fA-F\-]{36}_populated\.xlsx$", str(meta["generated_file"]))
+            )
+            else (str(meta["generated_file"]) if meta.get("generated_file") else None)
+        ),
         total_requirements=len(decisions_list),
         compliant_count=comp_cnt,
         non_compliant_count=non_comp_cnt,
@@ -876,7 +898,8 @@ async def submit_run_review(
                 decisions_json_path = output_dir / "compliance_decisions.json"
                 with open(decisions_json_path, "w", encoding="utf-8") as f:
                     json.dump({"items": updated_decisions, "decisions": updated_decisions}, f, indent=2, ensure_ascii=False)
-                out_excel_path = output_dir / f"{wb_path.stem}_populated.xlsx"
+                orig_name = wb_rec.original_filename if wb_rec and wb_rec.original_filename else str(meta.get("workbook_filename") or wb_path.name)
+                out_excel_path = output_dir / format_populated_filename(orig_name)
                 manifest_json_path = output_dir / "population_manifest.json"
                 populate_excel(wb_path, decisions_json_path, out_excel_path, manifest_json_path)
                 meta["generated_file"] = out_excel_path.name
@@ -926,12 +949,14 @@ async def download_run_excel(
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Populated Excel file not found on server")
 
-    download_name = str(meta.get("workbook_filename") or file_path.name)
-    if not download_name.endswith(".xlsx"):
-        download_name += ".xlsx"
-    if "_populated" not in download_name:
-        stem = Path(download_name).stem
-        download_name = f"{stem}_populated.xlsx"
+    orig_name = str(meta.get("workbook_filename") or "")
+    if not orig_name and run.workbook_id:
+        wb_res = await db.execute(select(Workbook).where(Workbook.id == run.workbook_id))
+        wb_rec = wb_res.scalar_one_or_none()
+        if wb_rec and wb_rec.original_filename:
+            orig_name = wb_rec.original_filename
+
+    download_name = format_populated_filename(orig_name or file_path.name)
 
     return FileResponse(
         path=str(file_path),
@@ -970,7 +995,14 @@ async def list_runs(
                 model_used=r.model_used,
                 pdf_filename=str(meta["pdf_filename"]) if meta.get("pdf_filename") else None,
                 workbook_filename=str(meta["workbook_filename"]) if meta.get("workbook_filename") else None,
-                generated_file=str(meta["generated_file"]) if meta.get("generated_file") else None,
+                generated_file=(
+                    format_populated_filename(str(meta["workbook_filename"]))
+                    if meta.get("workbook_filename") and (
+                        not meta.get("generated_file")
+                        or re.match(r"^[0-9a-fA-F\-]{36}_populated\.xlsx$", str(meta["generated_file"]))
+                    )
+                    else (str(meta["generated_file"]) if meta.get("generated_file") else None)
+                ),
                 total_requirements=decisions_len,
                 started_at=r.started_at,
                 completed_at=r.completed_at,

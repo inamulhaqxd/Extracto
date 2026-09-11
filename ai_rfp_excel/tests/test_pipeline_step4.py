@@ -439,6 +439,21 @@ def test_format_for_column() -> None:
     assert format_for_column("Compliance Status", val, cit, comp, rem) == "COMPLIANT"
     assert format_for_column("Status", val, cit, comp, rem) == "COMPLIANT"
 
+    # Verify column format adaptation: Yes/No, Y/N, Complies/Does Not Comply
+    assert format_for_column("Compliance (Yes/No)", val, cit, "COMPLIANT", rem) == "Yes"
+    assert format_for_column("Compliance (Yes/No)", val, cit, "NON_COMPLIANT", rem) == "No"
+    assert format_for_column("Compliance (Yes/No)", val, cit, "PARTIALLY_COMPLIANT", rem) == "Partial"
+    assert format_for_column("Compliance (Yes/No)", val, cit, "NOT_FOUND", rem) == "NOT_SPECIFIED"
+
+    assert format_for_column("Complies (Y/N)", val, cit, "COMPLIANT", rem) == "Y"
+    assert format_for_column("Complies (Y/N)", val, cit, "NON_COMPLIANT", rem) == "N"
+
+    assert format_for_column("Complies / Does Not Comply", val, cit, "COMPLIANT", rem) == "Complies"
+    assert format_for_column("Complies / Does Not Comply", val, cit, "NON_COMPLIANT", rem) == "Does Not Comply"
+
+    assert format_for_column("Compliance (Compliant/Non-Compliant)", val, cit, "COMPLIANT", rem) == "Compliant"
+    assert format_for_column("Compliance (Compliant/Non-Compliant)", val, cit, "NON_COMPLIANT", rem) == "Non-Compliant"
+
     assert format_for_column("Remarks", val, cit, comp, rem) == "Supported by default configuration."
     assert format_for_column("Notes", val, cit, comp, rem) == "Supported by default configuration."
     assert format_for_column("Explanation", val, cit, comp, rem) == "Supported by default configuration."
