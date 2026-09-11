@@ -23,6 +23,14 @@ from pathlib import Path
 from typing import Literal, NotRequired, TypedDict, cast
 
 import httpx
+from pydantic import BaseModel, Field
+
+try:
+    import instructor
+    from openai import OpenAI
+    _HAS_INSTRUCTOR: bool = True
+except Exception:
+    _HAS_INSTRUCTOR = False
 
 ComplianceState = Literal["COMPLIANT", "PARTIALLY_COMPLIANT", "NON_COMPLIANT", "NOT_FOUND", "AMBIGUOUS"]
 
@@ -38,6 +46,25 @@ VALID_CELL_REGEX: re.Pattern[str] = re.compile(r"^[A-Za-z]+[1-9][0-9]*$")
 
 PROMPT_CACHE: dict[str, str] = {}
 _PROMPT_CACHE_LOCK: threading.Lock = threading.Lock()
+
+_INSTRUCTOR_CLIENT: instructor.Instructor | None = None
+_INSTRUCTOR_CLIENT_LOCK: threading.Lock = threading.Lock()
+
+
+def get_instructor_client() -> instructor.Instructor | None:
+    """Thread-safe factory for Instructor client connected to local Ollama (Rule 10)."""
+    global _INSTRUCTOR_CLIENT
+    if not _HAS_INSTRUCTOR:
+        return None
+    with _INSTRUCTOR_CLIENT_LOCK:
+        if _INSTRUCTOR_CLIENT is None:
+            try:
+                base_v1 = f"{OLLAMA_BASE_URL.rstrip('/')}/v1"
+                raw_client = OpenAI(base_url=base_v1, api_key="ollama", timeout=30.0)
+                _INSTRUCTOR_CLIENT = instructor.from_openai(raw_client, mode=instructor.Mode.JSON)
+            except Exception:
+                _INSTRUCTOR_CLIENT = None
+        return _INSTRUCTOR_CLIENT
 
 
 def clear_prompt_cache() -> None:
@@ -66,6 +93,35 @@ class LLMResolution(TypedDict):
     citation: str
     confidence: float
     columns: NotRequired[dict[str, str]]
+
+
+class InstructorResolution(BaseModel):
+    """Structured Pydantic schema enforced by Instructor on local Ollama (PRD Rule 4, 7, 8)."""
+    extracted_value: str = Field(
+        description="Short factual answer, or brief answer to each clause for compound questions, or 'NOT_SPECIFIED' if absent from evidence."
+    )
+    compliance_state: ComplianceState = Field(
+        default="NOT_FOUND",
+        description="Compliance determination strictly based on evidence: COMPLIANT, NON_COMPLIANT, PARTIALLY_COMPLIANT, NOT_FOUND, or AMBIGUOUS."
+    )
+    remarks: str = Field(
+        default="",
+        description="Step-by-step calculation or concise explanation."
+    )
+    citation: str = Field(
+        default="None",
+        description="Snippet location header (e.g., 'Page X, Section Y') or 'None' if NOT_SPECIFIED."
+    )
+    confidence: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description="Confidence score between 0.0 and 1.0."
+    )
+    columns: dict[str, str] = Field(
+        default_factory=dict,
+        description="Optional mapping of target column names to their specific values."
+    )
 
 
 class SlotAssignment(TypedDict):
@@ -535,6 +591,65 @@ def call_local_ollama(
     return None
 
 
+def call_instructor_ollama(
+    prompt: str,
+    model_name: str = DEFAULT_LLM_MODEL,
+    max_retries: int = 2,
+) -> LLMResolution | None:
+    """Call local Ollama using Instructor for structured output enforcement and Pydantic validation (Rule 4, 10)."""
+    client = get_instructor_client()
+    if client is None:
+        return None
+
+    cache_key = f"instructor:{model_name}:{prompt}"
+    with _PROMPT_CACHE_LOCK:
+        if cache_key in PROMPT_CACHE:
+            try:
+                cached_dict: dict[str, object] = json.loads(PROMPT_CACHE[cache_key])
+                return parse_llm_json_response(json.dumps(cached_dict))
+            except Exception:
+                pass
+
+    try:
+        response: InstructorResolution = client.chat.completions.create(
+            model=model_name,
+            response_model=InstructorResolution,
+            max_retries=max_retries,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.0,
+        )
+
+        res_dict = response.model_dump()
+        with _PROMPT_CACHE_LOCK:
+            PROMPT_CACHE[cache_key] = json.dumps(res_dict)
+
+        extracted_val = str(response.extracted_value).strip()
+        if extracted_val.upper() in ("", "NONE", "NULL", "N/A", "NOT_SPECIFIED", "NOT SPECIFIED", "UNKNOWN"):
+            extracted_val = "NOT_SPECIFIED"
+
+        state = response.compliance_state
+        citation = str(response.citation).strip()
+        if extracted_val == "NOT_SPECIFIED" or state == "NOT_FOUND":
+            extracted_val = "NOT_SPECIFIED"
+            state = "NOT_FOUND"
+            citation = "None"
+
+        return {
+            "extracted_value": extracted_val,
+            "compliance_state": state,
+            "remarks": str(response.remarks).strip(),
+            "citation": citation,
+            "confidence": max(0.0, min(1.0, float(response.confidence))),
+            "columns": response.columns,
+        }
+    except Exception as err:
+        print(f"  [WARN] Instructor call failed, falling back to direct Ollama: {err}")
+        return None
+
+
 def offline_deterministic_fallback(candidate_snippets: list[dict[str, object]]) -> LLMResolution:
     """Universal Zero-Hallucination fallback when local AI is offline (Rule 7 & Rule 10)."""
     top_page = candidate_snippets[0].get("page_number", 1) if candidate_snippets else 1
@@ -580,19 +695,28 @@ def map_slots(
         cell_raw = slot_info.get("cell_coordinate")
         if cell_raw is None:
             continue
-        cell = str(cell_raw).strip()
-        if not cell or not VALID_CELL_REGEX.match(cell):
+        cell = str(cell_raw).strip().upper()
+        if not VALID_CELL_REGEX.match(cell):
             continue
 
         # Formula safety: NEVER overwrite existing Excel formulas (Rule 9)
         if bool(slot_info.get("has_formula", False)):
             continue
 
-        raw_type = str(slot_info.get("slot_type", slot_name)).strip().lower()
-        header_name = str(slot_info.get("header_name", "")).strip()
-        column_identifier = header_name if header_name else (raw_type or slot_name)
+        raw_type = str(slot_info.get("slot_type", "answer"))
+        header_raw = slot_info.get("header_name")
+        column_identifier = str(header_raw).strip() if header_raw else raw_type
 
-        val_to_write = format_for_column(
+        # Check for column-specific override from LLM
+        matched_val: str | None = None
+        cols = resolution.get("columns")
+        if cols:
+            for col_k, col_v in cols.items():
+                if col_k.strip().lower() == column_identifier.lower():
+                    matched_val = col_v
+                    break
+
+        val_to_write = matched_val if matched_val is not None else format_for_column(
             column_name=column_identifier,
             extracted_value=resolution["extracted_value"],
             citation=resolution["citation"],
@@ -659,9 +783,13 @@ def resolve_requirement(
         parsed_res: LLMResolution | None = None
         if use_ollama:
             prompt = build_prompt(req_text, section, snippets, target_columns=target_columns)
-            llm_raw = call_local_ollama(prompt, model_name=model_name, client=client)
-            if llm_raw:
-                parsed_res = parse_llm_json_response(llm_raw)
+            # 1. Primary: Use Instructor with strict Pydantic schema validation
+            parsed_res = call_instructor_ollama(prompt, model_name=model_name)
+            # 2. Resilient fallback: Direct local Ollama /api/chat with JSON parsing
+            if parsed_res is None:
+                llm_raw = call_local_ollama(prompt, model_name=model_name, client=client)
+                if llm_raw:
+                    parsed_res = parse_llm_json_response(llm_raw)
 
         if parsed_res is not None:
             resolution = parsed_res

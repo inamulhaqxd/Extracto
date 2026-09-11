@@ -10,6 +10,7 @@ Strict typing only — zero Any (Rule 4). 100% offline (Rule 10).
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import shutil
 import sys
@@ -18,10 +19,16 @@ from pathlib import Path
 from types import ModuleType
 from typing import TypedDict
 
-if "pandas" not in sys.modules:
+if importlib.util.find_spec("pandas") is None and "pandas" not in sys.modules:
     _pandas_stub = ModuleType("pandas")
     _pandas_stub.__spec__ = ModuleSpec(name="pandas", loader=None)
     sys.modules["pandas"] = _pandas_stub
+
+try:
+    from docling.document_converter import DocumentConverter
+    _HAS_DOCLING: bool = True
+except Exception:
+    _HAS_DOCLING = False
 
 import pdfplumber
 import pytesseract
@@ -71,11 +78,113 @@ def is_ocr_available() -> bool:
         return False
 
 
-def extract_pdf(pdf_path: Path, enable_ocr: bool = True) -> NormalizedDocument:
+def table_to_markdown(headers: list[str], rows: list[list[str]], title: str = "") -> str:
     """
-    Extracts text, structured tables, and image metadata from a PDF.
-    Runs OCR on low-text / diagram pages (< 50 chars) per PRD Section 10.
-    Conforms to PRD Section 12 Unified Page-Level Document Representation.
+    Convert structured table headers and rows into clean GitHub-flavored Markdown table format.
+    Guarantees table columns (pricing, BOQ items, capacities) are searchable and retain row context.
+    """
+    if not headers and not rows:
+        return ""
+    col_count = max(len(headers), max((len(r) for r in rows), default=0))
+    if col_count == 0:
+        return ""
+
+    padded_headers = list(headers) + [""] * (col_count - len(headers))
+    header_line = "| " + " | ".join(h.replace("|", "\\|").replace("\n", " ").strip() for h in padded_headers) + " |"
+    separator_line = "| " + " | ".join("---" for _ in range(col_count)) + " |"
+
+    row_lines: list[str] = []
+    for r in rows:
+        padded_row = list(r) + [""] * (col_count - len(r))
+        row_str = "| " + " | ".join(cell.replace("|", "\\|").replace("\n", " ").strip() for cell in padded_row) + " |"
+        row_lines.append(row_str)
+
+    md = [header_line, separator_line, *row_lines]
+    prefix = f"[Table {title}]:\n" if title else ""
+    return prefix + "\n".join(md)
+
+
+def extract_pdf_with_docling(pdf_path: Path) -> NormalizedDocument | None:
+    """
+    Extracts PDF pages and tables using Docling (Rule 1: No vision models, OCR only; Rule 4: Zero Any).
+    Converts document into PRD Section 12 Unified Page-Level Document Representation with rich Markdown tables.
+    """
+    if not _HAS_DOCLING:
+        return None
+
+    try:
+        converter = DocumentConverter()
+        result = converter.convert(str(pdf_path.resolve()))
+        doc = result.document
+        doc_id = pdf_path.stem
+
+        full_md: str = doc.export_to_markdown() if hasattr(doc, "export_to_markdown") else ""
+        num_pages: int = int(getattr(doc, "num_pages", 0) or 0)
+
+        all_tables: list[ExtractedTable] = []
+        if hasattr(doc, "tables") and doc.tables:
+            for t_idx, tbl in enumerate(doc.tables, start=1):
+                try:
+                    df = tbl.export_to_dataframe()
+                    t_headers = [str(c).strip() for c in df.columns]
+                    t_rows = [[str(cell).strip() for cell in row] for row in df.values.tolist()]
+                    page_no = int(getattr(tbl, "page_no", 1) or 1)
+                    all_tables.append({
+                        "table_id": f"T{page_no:02d}-{t_idx:02d}",
+                        "headers": t_headers,
+                        "rows": t_rows,
+                    })
+                except Exception:
+                    continue
+
+        pages_data: list[PageRepresentation] = []
+        if num_pages > 0:
+            for p_idx in range(1, num_pages + 1):
+                p_tables = [t for t in all_tables if t["table_id"].startswith(f"T{p_idx:02d}-")]
+                p_text = ""
+                try:
+                    if hasattr(doc, "export_to_markdown"):
+                        p_text = doc.export_to_markdown(page_no=p_idx)
+                except Exception:
+                    p_text = ""
+
+                if not p_text.strip() and p_idx == 1:
+                    p_text = full_md
+
+                pages_data.append({
+                    "page_number": p_idx,
+                    "text": p_text,
+                    "tables": p_tables,
+                    "images": [],
+                    "ocr": [],
+                    "vision_analysis": [],
+                })
+        else:
+            pages_data.append({
+                "page_number": 1,
+                "text": full_md,
+                "tables": all_tables,
+                "images": [],
+                "ocr": [],
+                "vision_analysis": [],
+            })
+
+        return {
+            "document_id": doc_id,
+            "source_file": str(pdf_path.resolve()),
+            "total_pages": len(pages_data),
+            "pages": pages_data,
+        }
+    except Exception as err:
+        print(f"  [WARN] Docling extraction failed, falling back to pdfplumber: {err}")
+        return None
+
+
+def extract_pdf_with_pdfplumber(pdf_path: Path, enable_ocr: bool = True) -> NormalizedDocument:
+    """
+    Extracts text, structured tables, and image metadata from a PDF using pdfplumber.
+    Runs local Tesseract OCR on low-text / diagram pages (< 50 chars) per PRD Section 10.
+    Converts structured tables into clean Markdown tables directly embedded in primary_text.
     """
     pages_data: list[PageRepresentation] = []
     doc_id = pdf_path.stem
@@ -167,6 +276,16 @@ def extract_pdf(pdf_path: Path, enable_ocr: bool = True) -> NormalizedDocument:
             else:
                 primary_text = clean_text
 
+            # Embed structured tables as Markdown tables to preserve cell columns & row context
+            table_md_blocks: list[str] = []
+            for tbl in structured_tables:
+                t_md = table_to_markdown(tbl["headers"], tbl["rows"], title=tbl["table_id"])
+                if t_md:
+                    table_md_blocks.append(t_md)
+
+            if table_md_blocks:
+                primary_text = (primary_text + "\n\n" + "\n\n".join(table_md_blocks)).strip()
+
             # 5. Assemble Page Representation (PRD Section 12)
             pages_data.append({
                 "page_number": page_idx,
@@ -183,6 +302,21 @@ def extract_pdf(pdf_path: Path, enable_ocr: bool = True) -> NormalizedDocument:
         "total_pages": total_pages,
         "pages": pages_data,
     }
+
+
+def extract_pdf(pdf_path: Path, enable_ocr: bool = True, prefer_docling: bool = True) -> NormalizedDocument:
+    """
+    Extracts text, structured tables, and image metadata from a PDF.
+    Attempts Docling extraction first if available and prefer_docling=True.
+    Falls back gracefully to high-accuracy pdfplumber extraction with local Tesseract OCR (PRD Section 10).
+    Conforms to PRD Section 12 Unified Page-Level Document Representation.
+    """
+    if prefer_docling and _HAS_DOCLING:
+        docling_result = extract_pdf_with_docling(pdf_path)
+        if docling_result is not None and docling_result["pages"] and any(p["text"].strip() for p in docling_result["pages"]):
+            return docling_result
+
+    return extract_pdf_with_pdfplumber(pdf_path=pdf_path, enable_ocr=enable_ocr)
 
 
 def save_pdf_output(data: NormalizedDocument, output_path: Path) -> Path:
