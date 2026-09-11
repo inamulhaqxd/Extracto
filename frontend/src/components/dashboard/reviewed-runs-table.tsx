@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -11,13 +12,22 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { FileText, Eye, CheckCircle2, Clock, AlertCircle, XCircle } from 'lucide-react'
+import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { FileText, Eye, CheckCircle2, Clock, AlertCircle, XCircle, Trash2 } from 'lucide-react'
 import type { BackendRunResponse } from '@/lib/api/runs'
 
 interface ReviewedRunsTableProps {
   runs: BackendRunResponse[]
   loading: boolean
   onInspect: (runId: string) => void
+  onDelete?: (runId: string) => Promise<void> | void
+  onDeleteAll?: () => Promise<void> | void
 }
 
 function getStatusBadge(status: string) {
@@ -74,14 +84,55 @@ function formatDate(dateStr?: string | null) {
   }
 }
 
-export function ReviewedRunsTable({ runs, loading, onInspect }: ReviewedRunsTableProps) {
+export function ReviewedRunsTable({ runs, loading, onInspect, onDelete, onDeleteAll }: ReviewedRunsTableProps) {
+  const [confirmDeleteRun, setConfirmDeleteRun] = useState<BackendRunResponse | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false)
+  const [isDeletingAll, setIsDeletingAll] = useState(false)
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDeleteRun || !onDelete) return
+    setIsDeleting(true)
+    try {
+      await onDelete(confirmDeleteRun.run_id)
+      setConfirmDeleteRun(null)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleConfirmDeleteAll = async () => {
+    if (!onDeleteAll) return
+    setIsDeletingAll(true)
+    try {
+      await onDeleteAll()
+      setConfirmDeleteAll(false)
+    } finally {
+      setIsDeletingAll(false)
+    }
+  }
+
   return (
     <Card className="border-border/60">
-      <CardHeader>
-        <CardTitle className="text-base font-semibold">Recent Processing & Reviewed Runs</CardTitle>
-        <CardDescription>
-          Detailed inspection of model resolutions and human reviewer corrections
-        </CardDescription>
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <CardTitle className="text-base font-semibold">Recent Extraction Runs</CardTitle>
+          <CardDescription>
+            History of processed RFP specifications and target Excel workbooks
+          </CardDescription>
+        </div>
+        {runs.length > 0 && onDeleteAll && (
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={() => setConfirmDeleteAll(true)}
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30 text-xs gap-1.5 h-8 self-start sm:self-auto"
+            aria-label="Delete all runs"
+          >
+            <Trash2 className="size-3.5" />
+            Delete All
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -139,15 +190,28 @@ export function ReviewedRunsTable({ runs, loading, onInspect }: ReviewedRunsTabl
                       {formatDate(run.started_at)}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onPress={() => onInspect(run.run_id)}
-                        className="h-8 gap-1 text-xs"
-                      >
-                        <Eye className="size-3.5" />
-                        Inspect
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onPress={() => onInspect(run.run_id)}
+                          className="h-8 gap-1 text-xs"
+                        >
+                          <Eye className="size-3.5" />
+                          Inspect
+                        </Button>
+                        {onDelete && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onPress={() => setConfirmDeleteRun(run)}
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            aria-label={`Delete run ${run.run_id}`}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -156,6 +220,86 @@ export function ReviewedRunsTable({ runs, loading, onInspect }: ReviewedRunsTabl
           </div>
         )}
       </CardContent>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        isOpen={Boolean(confirmDeleteRun)}
+        onOpenChange={(open: boolean) => !open && !isDeleting && setConfirmDeleteRun(null)}
+        className="sm:max-w-md"
+      >
+        <DialogHeader>
+          <DialogTitle>Delete Extraction Run</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete this run? This will permanently remove all generated JSON artifacts and the populated Excel output from disk.
+          </DialogDescription>
+        </DialogHeader>
+
+        {confirmDeleteRun && (
+          <div className="rounded-lg border border-border/60 bg-muted/40 p-3 text-xs space-y-1">
+            <div>
+              <span className="font-semibold text-foreground">File:</span>{' '}
+              <span className="text-muted-foreground">{confirmDeleteRun.pdf_filename || 'reference.pdf'}</span>
+            </div>
+            <div>
+              <span className="font-semibold text-foreground">Run ID:</span>{' '}
+              <code className="font-mono text-[11px] text-muted-foreground">{confirmDeleteRun.run_id}</code>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onPress={() => setConfirmDeleteRun(null)}
+            isDisabled={isDeleting}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onPress={handleConfirmDelete}
+            isDisabled={isDeleting}
+            className="gap-1.5"
+          >
+            <Trash2 className="size-3.5" />
+            {isDeleting ? 'Deleting...' : 'Delete Permanently'}
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Delete All Confirmation Dialog */}
+      <Dialog
+        isOpen={confirmDeleteAll}
+        onOpenChange={(open: boolean) => !open && !isDeletingAll && setConfirmDeleteAll(false)}
+        className="sm:max-w-md"
+      >
+        <DialogHeader>
+          <DialogTitle>Delete All Extraction Runs</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete all <span className="font-semibold text-foreground">{runs.length}</span> processing runs? This will permanently remove all generated JSON artifacts and populated Excel workbooks from disk. This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onPress={() => setConfirmDeleteAll(false)}
+            isDisabled={isDeletingAll}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onPress={handleConfirmDeleteAll}
+            isDisabled={isDeletingAll}
+            className="gap-1.5"
+          >
+            <Trash2 className="size-3.5" />
+            {isDeletingAll ? 'Deleting All...' : 'Delete All Runs'}
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </Card>
   )
 }
+

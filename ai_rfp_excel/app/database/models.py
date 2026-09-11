@@ -348,7 +348,9 @@ class ProcessingRun(Base):
     workbook: Mapped["Workbook | None"] = relationship(
         foreign_keys=[workbook_id], back_populates="processing_runs_wb"
     )
-    compliance_results: Mapped[list["ComplianceResult"]] = relationship(back_populates="run")
+    compliance_results: Mapped[list["ComplianceResult"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
     validation_results: Mapped[list["ValidationResult"]] = relationship(
         back_populates="run", cascade="all, delete-orphan"
     )

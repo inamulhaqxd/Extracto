@@ -1,17 +1,17 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import { RefreshCw } from 'lucide-react'
+import Link from 'next/link'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { RefreshCw, Plus } from 'lucide-react'
 import { useQualityDashboard } from '@/hooks/dashboard/use-quality-dashboard'
 import { useRunInspection } from '@/hooks/dashboard/use-run-inspection'
-import { useDatasetActions } from '@/hooks/dashboard/use-dataset-actions'
 import { QualityMetricCards } from '@/components/dashboard/quality-metric-cards'
-import { DatasetSnapshotCard } from '@/components/dashboard/dataset-snapshot-card'
 import { ReviewedRunsTable } from '@/components/dashboard/reviewed-runs-table'
 import { RunInspectionDialog } from '@/components/dashboard/run-inspection-dialog'
 
 export default function DashboardPage() {
-  const { metrics, runs, loading, error, refetch } = useQualityDashboard()
+  const { metrics, runs, loading, error, refetch, removeRun, removeAllRuns } = useQualityDashboard()
   const {
     selectedRunId,
     inspectionItems,
@@ -21,28 +21,35 @@ export default function DashboardPage() {
     closeInspection,
   } = useRunInspection()
 
-  const { isExporting, handleExportSnapshot } = useDatasetActions(refetch)
-
   return (
-    <div className="flex-1 space-y-6 p-6">
+    <div className="flex-1 space-y-6">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Quality & Feedback History</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Monitor model calibration against human review ground truth and manage local datasets
+            Overview of RFP extraction runs, processing status, and review metrics
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onPress={refetch}
-          isDisabled={loading}
-          className="self-start sm:self-auto gap-1.5 text-xs"
-        >
-          <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh Metrics
-        </Button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={refetch}
+            isDisabled={loading}
+            className="gap-1.5 text-xs"
+          >
+            <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Link
+            href="/rfp"
+            className={cn(buttonVariants({ size: 'sm' }), "gap-1.5 text-xs")}
+          >
+            <Plus className="size-3.5" />
+            New Extraction
+          </Link>
+        </div>
       </div>
 
       {/* Global Error Banner */}
@@ -56,20 +63,15 @@ export default function DashboardPage() {
       )}
 
       {/* KPI Metric Cards */}
-      <QualityMetricCards metrics={metrics} loading={loading} />
+      <QualityMetricCards metrics={metrics} totalRuns={runs.length} loading={loading} />
 
-      {/* Resolving Layer Breakdown & Dataset Snapshots */}
-      <DatasetSnapshotCard
-        metrics={metrics}
-        isExporting={isExporting}
-        onExport={handleExportSnapshot}
-      />
-
-      {/* Recent Processing & Reviewed Runs Table */}
+      {/* Recent Processing Runs Table */}
       <ReviewedRunsTable
         runs={runs}
         loading={loading}
         onInspect={openInspection}
+        onDelete={removeRun}
+        onDeleteAll={removeAllRuns}
       />
 
       {/* Per-Run Detailed Resolution Inspection Dialog */}

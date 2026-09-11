@@ -1,15 +1,16 @@
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { CheckCircle2, AlertTriangle, Database, Layers } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, FileText, Layers } from 'lucide-react'
 import type { QualityMetricsResponse } from '@/lib/api/runs'
 
 interface QualityMetricCardsProps {
   metrics: QualityMetricsResponse | null
+  totalRuns?: number
   loading: boolean
 }
 
-export function QualityMetricCards({ metrics, loading }: QualityMetricCardsProps) {
+export function QualityMetricCards({ metrics, totalRuns, loading }: QualityMetricCardsProps) {
   if (loading) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -33,12 +34,31 @@ export function QualityMetricCards({ metrics, loading }: QualityMetricCardsProps
     ? Math.round(metrics.exact_correction_accuracy * 100)
     : 0
 
+  const runsCount = metrics?.total_runs ?? totalRuns ?? 0
+
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <Card className="border-border/60">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Exact Match Accuracy
+            Total Runs
+          </CardTitle>
+          <FileText className="size-4 text-blue-500" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold tracking-tight">
+            {runsCount}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {metrics?.reviewed_runs ?? 0} reviewed across all documents
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/60">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Extraction Accuracy
           </CardTitle>
           <CheckCircle2 className="size-4 text-emerald-500" />
         </CardHeader>
@@ -47,7 +67,7 @@ export function QualityMetricCards({ metrics, loading }: QualityMetricCardsProps
             {metrics ? `${accuracyPct}%` : 'N/A'}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Status and value match reviewer ground truth
+            Verified ground truth match
           </p>
         </CardContent>
       </Card>
@@ -55,7 +75,7 @@ export function QualityMetricCards({ metrics, loading }: QualityMetricCardsProps
       <Card className="border-border/60">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Reviewed Examples
+            Specs Extracted
           </CardTitle>
           <Layers className="size-4 text-primary" />
         </CardHeader>
@@ -64,7 +84,7 @@ export function QualityMetricCards({ metrics, loading }: QualityMetricCardsProps
             {metrics?.total_reviewed_examples ?? 0}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Across {metrics?.reviewed_runs ?? 0} reviewed runs ({metrics?.total_runs ?? 0} total)
+            Total RFP specifications evaluated
           </p>
         </CardContent>
       </Card>
@@ -72,7 +92,7 @@ export function QualityMetricCards({ metrics, loading }: QualityMetricCardsProps
       <Card className="border-border/60">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Review Required Flags
+            Needs Review
           </CardTitle>
           <AlertTriangle className="size-4 text-amber-500" />
         </CardHeader>
@@ -81,24 +101,7 @@ export function QualityMetricCards({ metrics, loading }: QualityMetricCardsProps
             {metrics?.low_confidence_failures ?? 0}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Confidence &lt; 70% or flagged for human inspection
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/60">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Active Dataset Snapshot
-          </CardTitle>
-          <Database className="size-4 text-blue-500" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-sm font-semibold truncate font-mono mt-1 text-foreground" title={metrics?.active_dataset_version || 'v1.0-default'}>
-            {metrics?.active_dataset_version || 'v1.0-default'}
-          </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Local evaluation / benchmark version
+            Confidence &lt; 70% or flagged for review
           </p>
         </CardContent>
       </Card>

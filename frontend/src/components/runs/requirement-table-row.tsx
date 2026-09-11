@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Check, MoreVertical, Pencil, X } from 'lucide-react'
 import type { DecisionStatus, RequirementDecision } from '@/types'
 import { confidenceColor, confidenceLabel, isLowConfidence } from '@/lib/confidence'
@@ -39,8 +39,10 @@ export function RequirementTableRow({
     decision.override_value ?? decision.extracted_value
   )
   const [slotDrafts, setSlotDrafts] = useState<Record<string, string>>({})
+  const [prevOpen, setPrevOpen] = useState(open)
 
-  useEffect(() => {
+  if (open !== prevOpen) {
+    setPrevOpen(open)
     if (open && decision.slots && decision.slots.length > 0) {
       const initial: Record<string, string> = {}
       for (const slot of decision.slots) {
@@ -48,7 +50,7 @@ export function RequirementTableRow({
       }
       setSlotDrafts(initial)
     }
-  }, [open, decision.slots])
+  }
 
   const overrideInputId = `override-${decision.id}`
   const hasMultipleSlots = Boolean(decision.slots && decision.slots.length > 1)

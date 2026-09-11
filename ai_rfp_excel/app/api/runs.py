@@ -1,5 +1,6 @@
 import asyncio
 import json
+import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -22,10 +23,23 @@ from ai_rfp_excel.app.database.models import (
 )
 from ai_rfp_excel.app.logging import get_logger
 from ai_rfp_excel.app.pipeline.orchestrator import PipelineOrchestrator
+from ai_rfp_excel.app.pipeline.step4_compliance_resolver import clear_prompt_cache
 from ai_rfp_excel.app.pipeline.step5_excel_populator import populate_excel
 
 logger = get_logger("api.runs")
 router = APIRouter(prefix="/runs", tags=["runs"])
+
+
+class DeleteRunResponse(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    message: str
+    run_id: str
+
+
+class DeleteAllRunsResponse(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    message: str
+    deleted_count: int
 
 
 class CreateRunRequest(BaseModel):
@@ -964,3 +978,91 @@ async def list_runs(
             )
         )
     return output
+
+
+@router.delete("", response_model=DeleteAllRunsResponse)
+async def delete_all_processing_runs(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DeleteAllRunsResponse:
+    """Delete all processing runs, their database records, and all generated output artifacts from disk."""
+    stmt = select(ProcessingRun)
+    res = await db.execute(stmt)
+    runs = res.scalars().all()
+    deleted_count = len(runs)
+
+    # Clean up generated artifacts directory from disk for each run
+    for r in runs:
+        generated_dir = Path(settings.GENERATED_DIR) / str(r.id)
+        if generated_dir.exists() and generated_dir.is_dir():
+            try:
+                shutil.rmtree(generated_dir, ignore_errors=True)
+            except Exception as e:
+                logger.warning("Failed to remove generated run directory", run_id=str(r.id), error=str(e))
+
+    # Clear in-memory prompt cache so subsequent runs can re-evaluate cleanly
+    try:
+        clear_prompt_cache()
+    except Exception:
+        pass
+
+    # Delete the database records
+    for r in runs:
+        await db.delete(r)
+    await db.commit()
+
+    logger.info("Deleted all processing runs successfully", count=deleted_count)
+    return DeleteAllRunsResponse(
+        message="All processing runs and associated output files deleted successfully",
+        deleted_count=deleted_count,
+    )
+
+
+@router.delete("/{run_id}", response_model=DeleteRunResponse)
+async def delete_processing_run(
+    run_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DeleteRunResponse:
+    """Delete a processing run, its database records, and all generated output artifacts from disk."""
+    try:
+        run_uuid = uuid.UUID(run_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid run_id format: {e}",
+        ) from e
+
+    res = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_uuid))
+    run = res.scalar_one_or_none()
+    if not run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Processing run not found",
+        )
+
+    # Clean up generated artifacts directory from disk
+    generated_dir = Path(settings.GENERATED_DIR) / str(run_uuid)
+    if generated_dir.exists() and generated_dir.is_dir():
+        try:
+            shutil.rmtree(generated_dir, ignore_errors=True)
+            logger.info("Deleted generated run directory", run_id=str(run_uuid), path=str(generated_dir))
+        except Exception as e:
+            logger.warning("Failed to remove generated run directory", run_id=str(run_uuid), error=str(e))
+
+    # Clear in-memory prompt cache so subsequent runs can re-evaluate cleanly
+    try:
+        clear_prompt_cache()
+    except Exception:
+        pass
+
+    # Delete the database record (cascades compliance_results and validation_results)
+    await db.delete(run)
+    await db.commit()
+
+    logger.info("Deleted processing run successfully", run_id=str(run_uuid))
+    return DeleteRunResponse(
+        message="Processing run and associated output files deleted successfully",
+        run_id=str(run_uuid),
+    )
+

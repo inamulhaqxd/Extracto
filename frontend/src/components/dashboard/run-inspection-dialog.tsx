@@ -31,9 +31,9 @@ export function RunInspectionDialog({
     <Dialog
       isOpen={isOpen}
       onOpenChange={(open: boolean) => !open && onClose()}
-      className="sm:max-w-3xl max-h-[85vh] flex flex-col p-0 overflow-hidden"
+      className="sm:max-w-3xl h-[85vh] max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden"
     >
-      <DialogHeader className="p-6 pb-4 border-b border-border/60">
+      <DialogHeader className="shrink-0 p-6 pb-4 border-b border-border/60">
         <DialogTitle className="text-lg font-semibold flex items-center gap-2">
           Run Quality & Correction Inspection
         </DialogTitle>
@@ -42,7 +42,7 @@ export function RunInspectionDialog({
         </DialogDescription>
       </DialogHeader>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
         {loading ? (
           <div className="space-y-4 py-8 text-center">
             <div className="inline-block size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />

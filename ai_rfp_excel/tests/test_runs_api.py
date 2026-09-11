@@ -1,9 +1,16 @@
 import uuid
 from datetime import datetime
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from fastapi import HTTPException
 
 from ai_rfp_excel.app.api.runs import (
     CreateRunRequest,
     CreateSnapshotResponse,
+    DeleteAllRunsResponse,
+    DeleteRunResponse,
     FingerprintGroup,
     QualityMetricsResponse,
     ReviewItem,
@@ -11,6 +18,8 @@ from ai_rfp_excel.app.api.runs import (
     RunInspectionItem,
     RunResponse,
     SubmitReviewRequest,
+    delete_all_processing_runs,
+    delete_processing_run,
 )
 
 
@@ -121,3 +130,108 @@ def test_quality_metrics_models() -> None:
         created_at="2026-09-06T12:00:00",
     )
     assert snap.item_count == 40
+
+
+def test_delete_run_response_model() -> None:
+    test_uuid = str(uuid.uuid4())
+    res = DeleteRunResponse(
+        message="Processing run and associated output files deleted successfully",
+        run_id=test_uuid,
+    )
+    assert res.run_id == test_uuid
+    assert "deleted successfully" in res.message
+
+
+@pytest.mark.asyncio
+async def test_delete_processing_run_endpoint(tmp_path: Path) -> None:
+    run_uuid = uuid.uuid4()
+    mock_run = MagicMock()
+    mock_run.id = run_uuid
+
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_run
+    mock_db.execute.return_value = mock_result
+
+    gen_dir = tmp_path / str(run_uuid)
+    gen_dir.mkdir(parents=True)
+    dummy_file = gen_dir / "compliance_decisions.json"
+    dummy_file.write_text("{}", encoding="utf-8")
+
+    with patch("ai_rfp_excel.app.api.runs.settings.GENERATED_DIR", str(tmp_path)):
+        mock_user = MagicMock()
+        resp = await delete_processing_run(
+            run_id=str(run_uuid),
+            current_user=mock_user,
+            db=mock_db,
+        )
+
+        assert resp.run_id == str(run_uuid)
+        assert "deleted successfully" in resp.message
+        assert not gen_dir.exists()
+        mock_db.delete.assert_awaited_once_with(mock_run)
+        mock_db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_processing_run_not_found() -> None:
+    run_uuid = uuid.uuid4()
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_db.execute.return_value = mock_result
+
+    mock_user = MagicMock()
+    with pytest.raises(HTTPException) as exc_info:
+        await delete_processing_run(
+            run_id=str(run_uuid),
+            current_user=mock_user,
+            db=mock_db,
+        )
+    assert exc_info.value.status_code == 404
+
+
+def test_delete_all_runs_response_model() -> None:
+    res = DeleteAllRunsResponse(
+        message="All processing runs and associated output files deleted successfully",
+        deleted_count=5,
+    )
+    assert res.deleted_count == 5
+    assert "deleted successfully" in res.message
+
+
+@pytest.mark.asyncio
+async def test_delete_all_processing_runs_endpoint(tmp_path: Path) -> None:
+    run_uuid1 = uuid.uuid4()
+    run_uuid2 = uuid.uuid4()
+    mock_run1 = MagicMock()
+    mock_run1.id = run_uuid1
+    mock_run2 = MagicMock()
+    mock_run2.id = run_uuid2
+
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [mock_run1, mock_run2]
+    mock_db.execute.return_value = mock_result
+
+    # Create dummy directories
+    gen_dir1 = tmp_path / str(run_uuid1)
+    gen_dir1.mkdir(parents=True)
+    gen_dir2 = tmp_path / str(run_uuid2)
+    gen_dir2.mkdir(parents=True)
+
+    with patch("ai_rfp_excel.app.api.runs.settings.GENERATED_DIR", str(tmp_path)):
+        mock_user = MagicMock()
+        resp = await delete_all_processing_runs(
+            current_user=mock_user,
+            db=mock_db,
+        )
+
+        assert resp.deleted_count == 2
+        assert "All processing runs" in resp.message
+        assert not gen_dir1.exists()
+        assert not gen_dir2.exists()
+        assert mock_db.delete.await_count == 2
+        mock_db.commit.assert_awaited_once()
+
+

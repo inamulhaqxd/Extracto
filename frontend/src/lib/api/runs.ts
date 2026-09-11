@@ -285,3 +285,17 @@ export async function getRunInspections(runId: string): Promise<RunInspectionIte
   return apiFetch<RunInspectionItem[]>(`/runs/${runId}/inspections`)
 }
 
+export async function deleteRun(runId: string): Promise<{ message: string; run_id: string }> {
+  return apiFetch<{ message: string; run_id: string }>(`/runs/${encodeURIComponent(runId)}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function deleteAllRuns(): Promise<{ message: string; deleted_count: number }> {
+  return apiFetch<{ message: string; deleted_count: number }>('/runs', {
+    method: 'DELETE',
+  })
+}
+
+
+
