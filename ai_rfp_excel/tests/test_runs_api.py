@@ -3,8 +3,12 @@ from datetime import datetime
 
 from ai_rfp_excel.app.api.runs import (
     CreateRunRequest,
+    CreateSnapshotResponse,
+    FingerprintGroup,
+    QualityMetricsResponse,
     ReviewItem,
     RunDecisionResponse,
+    RunInspectionItem,
     RunResponse,
     SubmitReviewRequest,
 )
@@ -73,3 +77,47 @@ def test_submit_review_request() -> None:
     assert len(review_req.reviews) == 1
     assert review_req.reviews[0].status == "COMPLIANT"
     assert review_req.reviews[0].slot_overrides == {"answer": "400V 50Hz", "remarks": "Confirmed with vendor"}
+
+
+def test_quality_metrics_models() -> None:
+    fg = FingerprintGroup(
+        fingerprint="spec:wb",
+        label="Spec (Workbook)",
+        sample_count=5,
+        accuracy=0.80,
+    )
+    metrics = QualityMetricsResponse(
+        total_runs=10,
+        reviewed_runs=4,
+        total_reviewed_examples=40,
+        exact_correction_accuracy=0.875,
+        low_confidence_failures=3,
+        active_dataset_version="snapshot_20260906",
+        layer_breakdown={"deterministic_rules": 10, "verified_llm": 25, "fallback": 5},
+        fingerprint_groups=[fg],
+    )
+    assert metrics.total_runs == 10
+    assert metrics.exact_correction_accuracy == 0.875
+    assert len(metrics.fingerprint_groups) == 1
+
+    item = RunInspectionItem(
+        requirement_id="REQ-001",
+        requirement_text="128GB RAM",
+        predicted_status="COMPLIANT",
+        predicted_value="128GB",
+        confidence=0.95,
+        reasoning="Matches",
+        citation="Page 3",
+        corrected_status="COMPLIANT",
+        corrected_value="128GB",
+        is_exact_match=True,
+    )
+    assert item.is_exact_match is True
+
+    snap = CreateSnapshotResponse(
+        snapshot_id="snapshot_20260906",
+        file_path="/tmp/snapshot.jsonl",
+        item_count=40,
+        created_at="2026-09-06T12:00:00",
+    )
+    assert snap.item_count == 40

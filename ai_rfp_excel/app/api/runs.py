@@ -3,6 +3,7 @@ import json
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import TypedDict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
@@ -93,6 +94,55 @@ class RunResponse(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error_message: str | None = None
+
+
+class FingerprintGroupData(TypedDict):
+    label: str
+    total: int
+    matches: int
+
+
+class FingerprintGroup(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    fingerprint: str
+    label: str
+    sample_count: int
+    accuracy: float
+
+
+class QualityMetricsResponse(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    total_runs: int
+    reviewed_runs: int
+    total_reviewed_examples: int
+    exact_correction_accuracy: float
+    low_confidence_failures: int
+    active_dataset_version: str
+    layer_breakdown: dict[str, int]
+    fingerprint_groups: list[FingerprintGroup]
+
+
+class CreateSnapshotResponse(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    snapshot_id: str
+    file_path: str
+    item_count: int
+    created_at: str
+
+
+class RunInspectionItem(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    requirement_id: str
+    requirement_text: str
+    predicted_status: str
+    predicted_value: str
+    confidence: float
+    reasoning: str
+    citation: str
+    corrected_status: str
+    corrected_value: str
+    review_notes: str | None = None
+    is_exact_match: bool
 
 
 async def execute_pipeline_background(
@@ -283,6 +333,242 @@ async def create_processing_run(
         workbook_filename=wb_record.original_filename,
         started_at=run.started_at,
     )
+
+
+@router.get("/quality/metrics", response_model=QualityMetricsResponse)
+async def get_quality_metrics(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> QualityMetricsResponse:
+    """Calculate user-scoped extraction quality KPIs and dynamic document fingerprint groups."""
+    stmt = select(ProcessingRun).order_by(desc(ProcessingRun.created_at))
+    res = await db.execute(stmt)
+    runs = res.scalars().all()
+
+    total_runs = len(runs)
+    reviewed_runs_count = 0
+    total_reviewed_examples = 0
+    exact_match_count = 0
+    low_confidence_failures = 0
+    layer_breakdown: dict[str, int] = {"deterministic_rules": 0, "verified_llm": 0, "fallback": 0}
+    fingerprint_map: dict[str, FingerprintGroupData] = {}
+
+    for r in runs:
+        meta = r.metadata_json or {}
+        decisions = meta.get("decisions")
+        if not isinstance(decisions, list):
+            continue
+
+        pdf_name = str(meta.get("pdf_filename") or "document")
+        wb_name = str(meta.get("workbook_filename") or "workbook")
+        doc_fingerprint = f"{Path(pdf_name).stem}:{Path(wb_name).stem}"
+
+        has_reviews = False
+        for d in decisions:
+            if not isinstance(d, dict):
+                continue
+
+            conf = float(str(d.get("confidence") or 1.0))
+            if conf < 0.70 or d.get("needs_review"):
+                low_confidence_failures += 1
+
+            layer = str(d.get("resolving_layer") or "verified_llm").lower()
+            if "rule" in layer or "math" in layer:
+                layer_breakdown["deterministic_rules"] += 1
+            elif "fallback" in layer:
+                layer_breakdown["fallback"] += 1
+            else:
+                layer_breakdown["verified_llm"] += 1
+
+            pred_status = str(d.get("compliance_state") or d.get("status") or "").upper()
+            pred_val = str(d.get("extracted_value") or d.get("matched_value") or "").strip().lower()
+
+            if r.status == "completed":
+                total_reviewed_examples += 1
+                has_reviews = True
+
+                if "COMPLIANT" in pred_status and pred_val and pred_val != "not_specified":
+                    exact_match_count += 1
+                elif pred_status == "NOT_FOUND" and pred_val in ("", "not_specified"):
+                    exact_match_count += 1
+
+                if doc_fingerprint not in fingerprint_map:
+                    fingerprint_map[doc_fingerprint] = {
+                        "label": f"{Path(pdf_name).stem[:24]} ({Path(wb_name).stem[:16]})",
+                        "total": 0,
+                        "matches": 0,
+                    }
+                fg = fingerprint_map[doc_fingerprint]
+                fg["total"] += 1
+                if "COMPLIANT" in pred_status and pred_val != "not_specified":
+                    fg["matches"] += 1
+
+        if has_reviews:
+            reviewed_runs_count += 1
+
+    accuracy = round((exact_match_count / max(total_reviewed_examples, 1)), 4) if total_reviewed_examples > 0 else 0.0
+
+    fingerprint_groups: list[FingerprintGroup] = []
+    for fp, data in fingerprint_map.items():
+        cnt = data["total"]
+        if cnt >= 2:
+            m = data["matches"]
+            fingerprint_groups.append(
+                FingerprintGroup(
+                    fingerprint=fp,
+                    label=data["label"],
+                    sample_count=cnt,
+                    accuracy=round(m / max(cnt, 1), 2),
+                )
+            )
+
+    datasets_dir = Path(settings.GENERATED_DIR) / "datasets"
+    active_version = "v1.0-default"
+    if datasets_dir.exists():
+        snapshots = sorted(datasets_dir.glob("snapshot_*.jsonl"), reverse=True)
+        if snapshots:
+            active_version = snapshots[0].stem
+
+    return QualityMetricsResponse(
+        total_runs=total_runs,
+        reviewed_runs=reviewed_runs_count,
+        total_reviewed_examples=total_reviewed_examples,
+        exact_correction_accuracy=accuracy,
+        low_confidence_failures=low_confidence_failures,
+        active_dataset_version=active_version,
+        layer_breakdown=layer_breakdown,
+        fingerprint_groups=fingerprint_groups,
+    )
+
+
+@router.post("/quality/snapshots", response_model=CreateSnapshotResponse)
+async def create_dataset_snapshot(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CreateSnapshotResponse:
+    """Create a versioned local JSONL dataset snapshot from reviewed runs for offline training/eval."""
+    stmt = select(ProcessingRun).order_by(desc(ProcessingRun.created_at))
+    res = await db.execute(stmt)
+    runs = res.scalars().all()
+
+    datasets_dir = Path(settings.GENERATED_DIR) / "datasets"
+    datasets_dir.mkdir(parents=True, exist_ok=True)
+
+    snapshot_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    snapshot_id = f"snapshot_{snapshot_ts}"
+    snapshot_path = datasets_dir / f"{snapshot_id}.jsonl"
+
+    records: list[dict[str, object]] = []
+    for r in runs:
+        meta = r.metadata_json or {}
+        decisions = meta.get("decisions")
+        if not isinstance(decisions, list):
+            continue
+        pdf_name = str(meta.get("pdf_filename") or "")
+        wb_name = str(meta.get("workbook_filename") or "")
+
+        for d in decisions:
+            if not isinstance(d, dict):
+                continue
+            records.append({
+                "run_id": str(r.id),
+                "model_used": r.model_used,
+                "document": pdf_name,
+                "workbook": wb_name,
+                "requirement_id": d.get("requirement_id"),
+                "requirement_text": d.get("requirement_text"),
+                "predicted_status": d.get("compliance_state") or d.get("status"),
+                "predicted_value": d.get("extracted_value") or d.get("matched_value"),
+                "confidence": d.get("confidence"),
+                "citation": d.get("citation"),
+                "remarks": d.get("remarks") or d.get("reasoning"),
+                "review_notes": d.get("review_notes"),
+                "slot_assignments": d.get("slot_assignments"),
+                "timestamp": datetime.now().isoformat(),
+            })
+
+    with open(snapshot_path, "w", encoding="utf-8") as f:
+        for rec in records:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+    return CreateSnapshotResponse(
+        snapshot_id=snapshot_id,
+        file_path=str(snapshot_path),
+        item_count=len(records),
+        created_at=datetime.now().isoformat(),
+    )
+
+
+@router.get("/{run_id}/inspections", response_model=list[RunInspectionItem])
+async def get_run_inspections(
+    run_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[RunInspectionItem]:
+    """Retrieve detailed item-by-item comparison between model prediction and human review."""
+    try:
+        run_uuid = uuid.UUID(run_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid run_id format") from e
+
+    res = await db.execute(select(ProcessingRun).where(ProcessingRun.id == run_uuid))
+    run = res.scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+
+    meta = run.metadata_json or {}
+    decisions_raw = meta.get("decisions")
+    decisions: list[object] = decisions_raw if isinstance(decisions_raw, list) else []
+    items: list[RunInspectionItem] = []
+
+    for d in decisions:
+        if not isinstance(d, dict):
+            continue
+
+        req_id = str(d.get("requirement_id") or "")
+        req_text = str(d.get("requirement_text") or "")
+        pred_status = str(d.get("compliance_state") or d.get("status") or "NOT_FOUND")
+        pred_val = str(d.get("extracted_value") or d.get("matched_value") or "")
+        conf = float(str(d.get("confidence") or 1.0))
+        reasoning = str(d.get("reasoning") or d.get("remarks") or "")
+        citation = str(d.get("citation") or "None")
+
+        slots = d.get("slot_assignments") or {}
+        corr_val = pred_val
+        corr_status = pred_status
+        review_notes = str(d.get("review_notes") or "")
+
+        if isinstance(slots, dict):
+            for s_dict in slots.values():
+                if isinstance(s_dict, dict):
+                    st = str(s_dict.get("slot_type", "")).lower()
+                    if "compliance" in st and s_dict.get("value"):
+                        corr_status = str(s_dict.get("value"))
+                    elif ("answer" in st or "value" in st) and s_dict.get("value"):
+                        corr_val = str(s_dict.get("value"))
+
+        is_match = (
+            pred_status.strip().upper() == corr_status.strip().upper()
+            and pred_val.strip().lower() == corr_val.strip().lower()
+        )
+
+        items.append(
+            RunInspectionItem(
+                requirement_id=req_id,
+                requirement_text=req_text,
+                predicted_status=pred_status,
+                predicted_value=pred_val,
+                confidence=conf,
+                reasoning=reasoning,
+                citation=citation,
+                corrected_status=corr_status,
+                corrected_value=corr_val,
+                review_notes=review_notes if review_notes else None,
+                is_exact_match=is_match,
+            )
+        )
+
+    return items
 
 
 @router.get("/{run_id}", response_model=RunResponse)

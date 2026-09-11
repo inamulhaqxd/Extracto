@@ -12,8 +12,16 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
+from importlib.machinery import ModuleSpec
 from pathlib import Path
+from types import ModuleType
 from typing import TypedDict
+
+if "pandas" not in sys.modules:
+    _pandas_stub = ModuleType("pandas")
+    _pandas_stub.__spec__ = ModuleSpec(name="pandas", loader=None)
+    sys.modules["pandas"] = _pandas_stub
 
 import pdfplumber
 import pytesseract

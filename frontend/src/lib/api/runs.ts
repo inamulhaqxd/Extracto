@@ -127,6 +127,10 @@ export async function getRun(runId: string): Promise<BackendRunResponse> {
   return apiFetch<BackendRunResponse>(`/runs/${runId}`)
 }
 
+export async function listRuns(): Promise<BackendRunResponse[]> {
+  return apiFetch<BackendRunResponse[]>('/runs')
+}
+
 export async function submitRunReview(
   runId: string,
   reviews: Array<{
@@ -223,3 +227,61 @@ export function transformBackendRun(backend: BackendRunResponse): ProcessingRun 
     }),
   }
 }
+
+export interface FingerprintGroup {
+  fingerprint: string
+  label: string
+  sample_count: number
+  accuracy: number
+}
+
+export interface QualityMetricsResponse {
+  total_runs: number
+  reviewed_runs: number
+  total_reviewed_examples: number
+  exact_correction_accuracy: number
+  low_confidence_failures: number
+  active_dataset_version: string
+  layer_breakdown: {
+    deterministic_rules: number
+    verified_llm: number
+    fallback: number
+  }
+  fingerprint_groups: FingerprintGroup[]
+}
+
+export interface CreateSnapshotResponse {
+  snapshot_id: string
+  file_path: string
+  item_count: number
+  created_at: string
+}
+
+export interface RunInspectionItem {
+  requirement_id: string
+  requirement_text: string
+  predicted_status: string
+  predicted_value: string
+  confidence: number
+  reasoning: string
+  citation: string
+  corrected_status: string
+  corrected_value: string
+  review_notes?: string | null
+  is_exact_match: boolean
+}
+
+export async function getQualityMetrics(): Promise<QualityMetricsResponse> {
+  return apiFetch<QualityMetricsResponse>('/runs/quality/metrics')
+}
+
+export async function createDatasetSnapshot(): Promise<CreateSnapshotResponse> {
+  return apiFetch<CreateSnapshotResponse>('/runs/quality/snapshots', {
+    method: 'POST',
+  })
+}
+
+export async function getRunInspections(runId: string): Promise<RunInspectionItem[]> {
+  return apiFetch<RunInspectionItem[]>(`/runs/${runId}/inspections`)
+}
+
