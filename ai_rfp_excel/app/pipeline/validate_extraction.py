@@ -514,7 +514,7 @@ def main() -> None:
         "--json",
         "-j",
         type=Path,
-        default=Path("pipeline_lab/reference_pdf_output.json"),
+        default=Path("ai_rfp_excel/tests/fixtures/reference_pdf_output.json"),
         help="Path to extracted PDF JSON file",
     )
     parser.add_argument(
@@ -535,7 +535,7 @@ def main() -> None:
         "--save-report",
         "-s",
         type=Path,
-        default=Path("pipeline_lab/validation_report.json"),
+        default=Path("testworkflowfile/output/validation_report.json"),
         help="Path to save validation report JSON",
     )
     args = parser.parse_args()

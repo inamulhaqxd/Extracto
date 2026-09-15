@@ -6,8 +6,6 @@ Zero Any (Rule 4). 100% offline (Rule 10).
 
 from __future__ import annotations
 
-from typing import Any
-
 from ai_rfp_excel.app.matching.models import (
     ComplianceDecision,
     ComplianceState,
@@ -21,6 +19,9 @@ from ai_rfp_excel.app.pipeline.step4_compliance_resolver import (
 class ComplianceEngine:
     """Evaluates requirements using the production Step 4 Compliance Resolver."""
 
+    def __init__(self, llm_provider: object | None = None) -> None:
+        self.llm_provider = llm_provider
+
     async def evaluate_requirement(
         self,
         requirement_text: str,
@@ -29,7 +30,7 @@ class ComplianceEngine:
         model_name: str | None = None,
         requirement_id: str | None = None,
     ) -> ComplianceDecision:
-        candidate_snippets: list[dict[str, Any]] = []
+        candidate_snippets: list[dict[str, object]] = []
         if facts:
             for f in facts:
                 candidate_snippets.append({
@@ -38,7 +39,7 @@ class ComplianceEngine:
                     "source_type": f.source_type or "text",
                 })
 
-        req_payload: dict[str, Any] = {
+        req_payload: dict[str, object] = {
             "requirement_id": requirement_id or "REQ-001",
             "requirement_text": requirement_text,
             "candidate_snippets": candidate_snippets,

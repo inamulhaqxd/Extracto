@@ -958,13 +958,13 @@ def main() -> None:
     parser.add_argument(
         "--evidence",
         type=Path,
-        default=Path("pipeline_lab/candidate_evidence.json"),
+        default=Path("testworkflowfile/output/candidate_evidence.json"),
         help="Path to Step 3 candidate_evidence.json artifact",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("pipeline_lab/compliance_decisions.json"),
+        default=Path("testworkflowfile/output/compliance_decisions.json"),
         help="Path to save Step 4 compliance_decisions.json",
     )
     parser.add_argument(

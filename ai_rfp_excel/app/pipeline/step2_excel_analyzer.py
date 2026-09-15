@@ -466,14 +466,14 @@ def main() -> None:
         "--output-analysis",
         "-o",
         type=Path,
-        default=Path("pipeline_lab/excel_analysis.json"),
+        default=Path("testworkflowfile/output/excel_analysis.json"),
         help="Path to save workbook analysis JSON",
     )
     parser.add_argument(
         "--output-questions",
         "-q",
         type=Path,
-        default=Path("pipeline_lab/excel_questions.json"),
+        default=Path("testworkflowfile/output/excel_questions.json"),
         help="Path to save flattened requirements list JSON",
     )
     args = parser.parse_args()

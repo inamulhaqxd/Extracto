@@ -18,10 +18,7 @@ import httpx
 try:
     from ai_rfp_excel.app.pipeline.step3_indexer import DocumentChunk, tokenize
 except ModuleNotFoundError:
-    try:
-        from pipeline_lab.step3_indexer import DocumentChunk, tokenize
-    except ModuleNotFoundError:
-        from step3_indexer import DocumentChunk, tokenize  # type: ignore[no-redef]
+    from step3_indexer import DocumentChunk, tokenize  # type: ignore[no-redef]
 
 OLLAMA_BASE_URL: str = (
     os.getenv("OLLAMA_BASE_URL")
@@ -31,7 +28,7 @@ OLLAMA_BASE_URL: str = (
 DEFAULT_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 
 # Persistent vector cache for zero redundant embedding calls across runs
-EMBEDDING_CACHE_FILE: Path = Path("pipeline_lab/output/embeddings_cache.json")
+EMBEDDING_CACHE_FILE: Path = Path("testworkflowfile/output/embeddings_cache.json")
 
 
 def _load_disk_cache() -> dict[str, list[float]]:

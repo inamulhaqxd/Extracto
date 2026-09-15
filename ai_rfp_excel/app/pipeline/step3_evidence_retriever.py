@@ -16,12 +16,8 @@ try:
     from ai_rfp_excel.app.pipeline.step3_indexer import SourceType, build_document_chunks
     from ai_rfp_excel.app.pipeline.step3_search import batch_get_local_embeddings, simple_hybrid_search
 except ModuleNotFoundError:
-    try:
-        from pipeline_lab.step3_indexer import SourceType, build_document_chunks
-        from pipeline_lab.step3_search import batch_get_local_embeddings, simple_hybrid_search
-    except ModuleNotFoundError:
-        from step3_indexer import SourceType, build_document_chunks  # type: ignore[no-redef]
-        from step3_search import batch_get_local_embeddings, simple_hybrid_search  # type: ignore[no-redef]
+    from step3_indexer import SourceType, build_document_chunks  # type: ignore[no-redef]
+    from step3_search import batch_get_local_embeddings, simple_hybrid_search  # type: ignore[no-redef]
 
 
 class EvidenceSnippet(TypedDict):
@@ -200,19 +196,19 @@ def main() -> None:
     parser.add_argument(
         "--pdf-output",
         type=Path,
-        default=Path("pipeline_lab/pdf_output.json"),
+        default=Path("testworkflowfile/output/pdf_output.json"),
         help="Path to Step 1 pdf_output.json",
     )
     parser.add_argument(
         "--excel-analysis",
         type=Path,
-        default=Path("pipeline_lab/excel_analysis.json"),
+        default=Path("testworkflowfile/output/excel_analysis.json"),
         help="Path to Step 2 excel_analysis.json",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("pipeline_lab/candidate_evidence.json"),
+        default=Path("testworkflowfile/output/candidate_evidence.json"),
         help="Path to save candidate_evidence.json artifact",
     )
     parser.add_argument(

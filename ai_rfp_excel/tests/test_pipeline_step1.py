@@ -93,7 +93,7 @@ def test_json_roundtrip(sample_pdf_path: Path, tmp_path: Path) -> None:
 
 def test_automated_validation(sample_pdf_path: Path, tmp_path: Path) -> None:
     """Tests automated health checks, reverse ground truth probing, and report generation."""
-    ref_json = Path("pipeline_lab/reference_pdf_output.json")
+    ref_json = Path("ai_rfp_excel/tests/fixtures/reference_pdf_output.json")
     if ref_json.exists():
         json_path = ref_json
     else:
@@ -112,7 +112,7 @@ def test_automated_validation(sample_pdf_path: Path, tmp_path: Path) -> None:
 
 def test_synonym_and_alternative_probing(sample_pdf_path: Path, tmp_path: Path) -> None:
     """Tests that synonyms and alternative evidence are detected."""
-    ref_json = Path("pipeline_lab/reference_pdf_output.json")
+    ref_json = Path("ai_rfp_excel/tests/fixtures/reference_pdf_output.json")
     if not ref_json.exists():
         pytest.skip("reference_pdf_output.json required for synonym probe tests")
 
