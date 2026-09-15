@@ -71,7 +71,7 @@ make seed
 ## 📁 Repository Structure
 
 ```
-tender/
+Extracto/
 ├── ai_rfp_excel/         # FastAPI backend & 5-phase pipeline engine
 │   ├── app/pipeline/     # Core processing steps (Extract -> Search -> Populate)
 │   └── tests/            # Automated unit & integration tests
