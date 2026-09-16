@@ -20,7 +20,7 @@ from ai_rfp_excel.app.pipeline.orchestrator import PipelineOrchestrator, Pipelin
 async def run_main_pipeline(
     pdf_path: str,
     excel_path: str,
-    output_dir: str = "testworkflowfile/output",
+    output_dir: str = "data/generated",
     model: str | None = None,
     concurrency: int = 2,
 ) -> PipelineResult:
@@ -64,33 +64,32 @@ async def run_main_pipeline(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run main AI RFP PDF-to-Excel pipeline.")
-    parser.add_argument("pdf", nargs="?", default="testworkflowfile/refernce.pdf", help="Path to input PDF file")
-    parser.add_argument("excel", nargs="?", default="testworkflowfile/evaluation_round2_compute_specs.xlsx", help="Path to input Excel file")
-    parser.add_argument("-o", "--output-dir", default="testworkflowfile/output", help="Output directory for generated Excel")
+    parser.add_argument("pdf", nargs="?", default=None, help="Path to input PDF file")
+    parser.add_argument("excel", nargs="?", default=None, help="Path to input Excel file")
+    parser.add_argument("-o", "--output-dir", default="data/generated", help="Output directory for generated Excel")
     parser.add_argument("-m", "--model", default=None, help="LLM Model to use (e.g. qwen2.5:1.5b)")
     parser.add_argument("-c", "--concurrency", type=int, default=2, help="Number of concurrent workers (default: 2)")
     args = parser.parse_args()
 
-    pdf_p = Path(args.pdf)
-    excel_p = Path(args.excel)
+    pdf_p = Path(args.pdf) if args.pdf else None
+    excel_p = Path(args.excel) if args.excel else None
 
-    if not pdf_p.exists():
-        # Fallback to test files if default not found
-        sample_pdfs = list(Path("testworkflowfile").glob("*.pdf"))
+    if pdf_p is None or not pdf_p.exists():
+        sample_pdfs = list(Path("data/uploads").glob("*.pdf")) or list(Path("data").glob("*.pdf"))
         if sample_pdfs:
             pdf_p = sample_pdfs[0]
             print(f"Using found PDF: {pdf_p}")
         else:
-            print(f"Error: PDF file {args.pdf} not found.", file=sys.stderr)
+            print(f"Error: PDF file {args.pdf or 'not specified'} not found.", file=sys.stderr)
             sys.exit(1)
 
-    if not excel_p.exists():
-        sample_excels = list(Path("testworkflowfile").glob("*.xlsx"))
+    if excel_p is None or not excel_p.exists():
+        sample_excels = list(Path("data/uploads").glob("*.xlsx")) or list(Path("data").glob("*.xlsx"))
         if sample_excels:
             excel_p = sample_excels[0]
             print(f"Using found Excel: {excel_p}")
         else:
-            print(f"Error: Excel file {args.excel} not found.", file=sys.stderr)
+            print(f"Error: Excel file {args.excel or 'not specified'} not found.", file=sys.stderr)
             sys.exit(1)
 
     asyncio.run(

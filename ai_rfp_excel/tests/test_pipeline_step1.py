@@ -18,16 +18,14 @@ from ai_rfp_excel.app.pipeline.validate_extraction import validate
 @pytest.fixture
 def sample_pdf_path() -> Path:
     candidates = [
-        Path("testworkflowfile/HIGH_multisite_outage_report.pdf"),
-        Path("testworkflowfile/MEDIUM_datacenter_power_cooling.pdf"),
-        Path("testworkflowfile/LOW_office_equipment.pdf"),
-        Path("../testworkflowfile/refernce.pdf"),
-        Path("testworkflowfile/refernce.pdf"),
+        Path("data/uploads/sample.pdf"),
+        Path("data/sample.pdf"),
+        Path("data/uploads/reference.pdf"),
     ]
     for p in candidates:
         if p.exists():
             return p
-    pytest.skip("No reference PDF found in testworkflowfile/.")
+    pytest.skip("No reference PDF found in data directory.")
 
 
 def test_prd_section12_document_structure(sample_pdf_path: Path) -> None:

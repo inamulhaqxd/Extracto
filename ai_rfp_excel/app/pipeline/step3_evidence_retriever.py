@@ -196,19 +196,19 @@ def main() -> None:
     parser.add_argument(
         "--pdf-output",
         type=Path,
-        default=Path("testworkflowfile/output/pdf_output.json"),
+        default=Path("data/generated/pdf_output.json"),
         help="Path to Step 1 pdf_output.json",
     )
     parser.add_argument(
         "--excel-analysis",
         type=Path,
-        default=Path("testworkflowfile/output/excel_analysis.json"),
+        default=Path("data/generated/excel_analysis.json"),
         help="Path to Step 2 excel_analysis.json",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("testworkflowfile/output/candidate_evidence.json"),
+        default=Path("data/generated/candidate_evidence.json"),
         help="Path to save candidate_evidence.json artifact",
     )
     parser.add_argument(

@@ -28,7 +28,7 @@ OLLAMA_BASE_URL: str = (
 DEFAULT_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 
 # Persistent vector cache for zero redundant embedding calls across runs
-EMBEDDING_CACHE_FILE: Path = Path("testworkflowfile/output/embeddings_cache.json")
+EMBEDDING_CACHE_FILE: Path = Path("data/processed/embeddings_cache.json")
 
 
 def _load_disk_cache() -> dict[str, list[float]]:

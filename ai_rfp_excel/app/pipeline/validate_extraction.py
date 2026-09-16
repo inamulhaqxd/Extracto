@@ -535,7 +535,7 @@ def main() -> None:
         "--save-report",
         "-s",
         type=Path,
-        default=Path("testworkflowfile/output/validation_report.json"),
+        default=Path("data/generated/validation_report.json"),
         help="Path to save validation report JSON",
     )
     args = parser.parse_args()

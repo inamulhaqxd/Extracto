@@ -40,13 +40,37 @@ ai_rfp_excel/data/
 # Docker
 docker-compose.override.yml
 
-# Test outputs
-testworkflowfile/*_populated_*.xlsx
-testworkflowfile/*_populated.xlsx
-testworkflowfile/output/
+# Test & Sample workflows
+testworkflowfile/
 pipeline_lab/output/
 Modelfile_qwen
 logs/
+
+# Documents, PDFs & Spreadsheets (do not upload documents to GitHub)
+*.pdf
+*.xlsx
+*.xls
+*.xlsm
+*.xlsb
+*.csv
+*.docx
+*.doc
+*.pptx
+*.ppt
+*.odt
+*.ods
+*.odp
+*.rtf
+
+# Images and media from data (do not upload png or images to GitHub)
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.bmp
+*.tiff
+*.tif
+*.gif
 
 # Frontend / Node / Next.js
 node_modules/

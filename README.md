@@ -76,7 +76,7 @@ Extracto/
 │   ├── app/pipeline/     # Core processing steps (Extract -> Search -> Populate)
 │   └── tests/            # Automated unit & integration tests
 ├── frontend/             # Next.js 15 web interface & live run monitor
-├── testworkflowfile/     # Sample benchmark PDFs and Excel questionnaires
+├── data/                 # Local uploads and generated artifacts (git-ignored)
 ├── run_pipeline.py       # Standalone CLI runner
 └── Makefile              # Task runner (run, stop, test, check)
 ```

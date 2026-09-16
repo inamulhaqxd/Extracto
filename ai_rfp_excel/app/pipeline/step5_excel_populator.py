@@ -399,28 +399,28 @@ if __name__ == "__main__":
                     orig_path = candidate
                 elif (candidate.parent / "input" / candidate.name).exists():
                     orig_path = candidate.parent / "input" / candidate.name
-                elif (Path("testworkflowfile/input") / candidate.name).exists():
-                    orig_path = Path("testworkflowfile/input") / candidate.name
-                elif (Path("testworkflowfile") / candidate.name).exists():
-                    orig_path = Path("testworkflowfile") / candidate.name
+                elif (Path("data/uploads") / candidate.name).exists():
+                    orig_path = Path("data/uploads") / candidate.name
+                elif (Path("data") / candidate.name).exists():
+                    orig_path = Path("data") / candidate.name
 
     if orig_path is None or not orig_path.exists():
-        # Fallback: look for any .xlsx in testworkflowfile/input
-        input_candidates = list(Path("testworkflowfile/input").glob("*.xlsx"))
+        # Fallback: look for any .xlsx in data/uploads or data
+        input_candidates = list(Path("data/uploads").glob("*.xlsx")) or list(Path("data").glob("*.xlsx"))
         if input_candidates:
             orig_path = input_candidates[0]
         else:
-            raise FileNotFoundError(f"Source template not found in {analysis_file} or testworkflowfile/input. Please supply an original template.")
+            raise FileNotFoundError(f"Source template not found in {analysis_file} or data/uploads. Please supply an original template.")
 
     # Determine output Excel path
     if args.output_excel:
         out_excel = args.output_excel
-    elif orig_path.parent.name == "input":
-        out_dir = orig_path.parent.parent / "output"
+    elif orig_path.parent.name == "input" or orig_path.parent.name == "uploads":
+        out_dir = Path("data/generated")
         out_dir.mkdir(parents=True, exist_ok=True)
         out_excel = out_dir / f"populated_{orig_path.name}"
-    elif Path("testworkflowfile/output").exists():
-        out_excel = Path("testworkflowfile/output") / f"populated_{orig_path.name}"
+    elif Path("data/generated").exists():
+        out_excel = Path("data/generated") / f"populated_{orig_path.name}"
     else:
         out_excel = base_dir / f"populated_{orig_path.name}"
 
@@ -433,7 +433,7 @@ if __name__ == "__main__":
         manifest_output_path=manifest_file,
     )
 
-    # Mirror copy to pipeline_lab/ if saved in testworkflowfile/output/
+    # Mirror copy to pipeline_lab/ if saved in data/generated/
     pipeline_copy = base_dir / f"populated_{orig_path.name}"
     if out_excel.resolve() != pipeline_copy.resolve():
         try:
