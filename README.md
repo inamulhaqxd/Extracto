@@ -7,11 +7,9 @@
 
 ## 🎬 Demo
 
-<div align="center">
-  <video src="https://github.com/inamulhaqxd/Extracto/raw/master/assets/extracto-ai-demo.mp4" controls="controls" width="100%">
-    <a href="https://github.com/inamulhaqxd/Extracto/raw/master/assets/extracto-ai-demo.mp4">Watch Extracto AI Demo Video</a>
-  </video>
-</div>
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/223618e0-ea8c-40aa-a483-30f5d61fb986" controls="controls" width="100%"></video>
+</p>
 
 ---
 
