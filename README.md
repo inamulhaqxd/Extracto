@@ -5,6 +5,16 @@
 
 ---
 
+## 🎬 Demo
+
+<div align="center">
+  <video src="https://github.com/inamulhaqxd/Extracto/raw/master/assets/extracto-ai-demo.mp4" controls="controls" width="100%">
+    <a href="https://github.com/inamulhaqxd/Extracto/raw/master/assets/extracto-ai-demo.mp4">Watch Extracto AI Demo Video</a>
+  </video>
+</div>
+
+---
+
 ## 📌 Overview
 
 | Input | Output | Execution |
